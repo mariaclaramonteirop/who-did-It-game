@@ -1,6 +1,6 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Users } from 'lucide-react';
+﻿import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Check, Coffee, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Users } from 'lucide-react';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
@@ -9,13 +9,34 @@ import type { AdminDashboard, AdminPlayer, AdminRoom, AdminUser, Category, Playe
 const roundKey = (code: string) => `jdc-round-${code}`;
 
 function Shell({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const showBack = location.pathname !== '/';
+
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-3xl content-start gap-5 px-4 py-5 sm:py-8">
       <header className="flex items-center justify-between gap-3">
-        <Link to="/" className="text-xl font-black text-ink sm:text-2xl">Quem fez isso?</Link>
+        <div className="flex min-w-0 items-center gap-3">
+          {showBack ? (
+            <Button type="button" variant="ghost" className="h-11 w-11 shrink-0 px-0" onClick={() => navigate(-1)}>
+              <ArrowLeft size={18} />
+            </Button>
+          ) : null}
+          <Link to="/" className="flex min-w-0 items-center gap-3">
+            <img src="/logo.png" alt="Quem fez isso?" className="h-11 w-11 shrink-0 rounded-md border-2 border-ink bg-white object-contain" />
+            <div className="min-w-0">
+              <p className="truncate text-xl font-black text-ink sm:text-2xl">Quem fez isso?</p>
+              <p className="truncate text-xs font-black uppercase tracking-wide text-zinc-600">Who Did It?</p>
+            </div>
+          </Link>
+        </div>
         <div className="h-10 w-10 rounded-md border-2 border-ink bg-teal shadow-crisp" aria-hidden />
       </header>
       {children}
+      <footer className="mt-2 flex items-center gap-2 border-t-2 border-ink pt-3 text-xs font-bold text-zinc-600">
+        <Coffee size={14} className="text-zinc-500" />
+        <span>Desenvolvido por Maria Clara.</span>
+      </footer>
     </main>
   );
 }
@@ -55,6 +76,22 @@ function Home() {
             </form>
           </Card>
         </div>
+        <Card className="grid gap-4">
+          <h2 className="text-2xl font-black">Ajuda</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <h3 className="text-lg font-black">Manual</h3>
+              <p className="text-sm font-bold">Crie a sala, escolha o tempo de voto e adicione os jogadores antes de iniciar a partida.</p>
+              <p className="text-sm font-bold">Se entrar numa sala existente, use o código da sala na tela inicial.</p>
+            </div>
+            <div className="grid gap-2">
+              <h3 className="text-lg font-black">Regras</h3>
+              <p className="text-sm font-bold">Cada jogador vota uma vez por rodada.</p>
+              <p className="text-sm font-bold">Se o tempo acabar sem voto, a vez é pulada e o voto fica em branco.</p>
+              <p className="text-sm font-bold">A partida termina quando alguém atinge a pontuação máxima da sala.</p>
+            </div>
+          </div>
+        </Card>
       </section>
     </Shell>
   );
@@ -68,6 +105,8 @@ function CreateRoom() {
     maxScore: 5,
     gameMode: 'classic',
     voteVisibility: 'anonymous',
+    voteTimeEnabled: false,
+    voteTimeSeconds: 30,
     categoryFilter: [] as string[],
   });
   const [error, setError] = useState('');
@@ -136,7 +175,29 @@ function CreateRoom() {
               </Select>
             </Field>
           </div>
+          <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
+            <label className="flex items-center gap-3 rounded-md border-2 border-ink bg-paper px-3 py-3 font-black">
+              <input
+                type="checkbox"
+                checked={form.voteTimeEnabled}
+                onChange={(e) => setForm({ ...form, voteTimeEnabled: e.target.checked })}
+                className="h-5 w-5 accent-black"
+              />
+              Tempo de voto
+            </label>
+            <Field label="Max. segundos">
+              <Input
+                type="number"
+                min={10}
+                max={300}
+                disabled={!form.voteTimeEnabled}
+                value={form.voteTimeSeconds}
+                onChange={(e) => setForm({ ...form, voteTimeSeconds: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
           <p className="text-sm font-bold">Sem seleção, a sala usa todas as categorias.</p>
+          <p className="text-sm font-bold">Se o tempo acabar sem voto, a vez pula e conta como voto vazio.</p>
           <Button disabled={loading}>{loading ? 'Criando...' : 'Criar sala'}</Button>
         </form>
       </Card>
@@ -1132,6 +1193,7 @@ function Game() {
   const [selected, setSelected] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
   const navigate = useNavigate();
 
   async function loadRound() {
@@ -1141,7 +1203,12 @@ function Game() {
       const stored = Number(localStorage.getItem(roundKey(code)));
       const current = stored ? await gameApi.getRound(stored) : await gameApi.createRound(code);
       localStorage.setItem(roundKey(code), String(current.roundId));
+      if (current.status === 'finished') {
+        navigate(`/room/${code}/result`);
+        return;
+      }
       setRound(current);
+      setNow(Date.now());
       setVoterIndex(Math.min(current.votesReceived, current.players.length - 1));
     } catch (err) {
       setError(apiError(err));
@@ -1154,8 +1221,22 @@ function Game() {
     loadRound();
   }, [code]);
 
+  useEffect(() => {
+    if (!round?.voteDeadlineAt || round.status !== 'waiting_votes') return undefined;
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+      if (Date.parse(round.voteDeadlineAt ?? '') <= Date.now()) {
+        loadRound();
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [round?.voteDeadlineAt, round?.status]);
+
   const voter = round?.players[voterIndex];
   const options = useMemo(() => round?.players.filter((player) => player.id !== voter?.id) ?? [], [round, voter]);
+  const secondsLeft = round?.voteDeadlineAt ? Math.max(0, Math.ceil((Date.parse(round.voteDeadlineAt) - now) / 1000)) : null;
 
   async function vote() {
     if (!round || !voter || !selected) return;
@@ -1186,6 +1267,11 @@ function Game() {
           <span className="rounded-md bg-violet px-3 py-1 font-black text-white">Rodada {round.roundNumber}</span>
           <span className="font-black">{round.votesReceived}/{round.totalPlayers}</span>
         </div>
+        {secondsLeft !== null ? (
+          <div className="rounded-md border-2 border-ink bg-teal px-3 py-2 font-black">
+            Tempo restante: {secondsLeft}s
+          </div>
+        ) : null}
         <h1 className="text-3xl font-black leading-tight">{round.question.text}</h1>
         <div className="rounded-md border-2 border-ink bg-gold px-3 py-2 font-black">
           Vez de {voter?.name}
