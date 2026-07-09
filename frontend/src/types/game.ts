@@ -42,3 +42,11 @@ export type RoundResult = {
   gameFinished: boolean;
   ranking: Player[];
 };
+
+export type Question = {
+  id: number;
+  text: string;
+  category: string;
+  level: string;
+  isActive: boolean;
+};

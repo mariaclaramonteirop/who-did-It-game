@@ -1,10 +1,10 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, Check, Copy, Play, Plus, RotateCcw, Users } from 'lucide-react';
+import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Settings, Users } from 'lucide-react';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
-import type { Player, Room, Round, RoundResult } from './types/game';
+import type { Player, Question, Room, Round, RoundResult } from './types/game';
 
 const roundKey = (code: string) => `jdc-round-${code}`;
 
@@ -12,8 +12,10 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-3xl content-start gap-5 px-4 py-5 sm:py-8">
       <header className="flex items-center justify-between gap-3">
-        <Link to="/" className="text-xl font-black text-ink sm:text-2xl">Jogo dos Culpados</Link>
-        <div className="h-10 w-10 rounded-md border-2 border-ink bg-teal shadow-crisp" aria-hidden />
+        <Link to="/" className="text-xl font-black text-ink sm:text-2xl">Quem fez isso?</Link>
+        <Link to="/admin" className="grid h-10 w-10 place-items-center rounded-md border-2 border-ink bg-teal shadow-crisp" title="Admin">
+          <Settings size={18} />
+        </Link>
       </header>
       {children}
     </main>
@@ -33,7 +35,8 @@ function Home() {
     <Shell>
       <section className="grid gap-4">
         <div className="rounded-lg border-2 border-ink bg-gold p-5 shadow-crisp">
-          <h1 className="text-4xl font-black leading-none sm:text-5xl">Jogo dos Culpados</h1>
+          <h1 className="text-4xl font-black leading-none sm:text-5xl">Quem fez isso?</h1>
+          <p className="mt-1 text-xl font-black">Who Did It?</p>
           <p className="mt-3 max-w-xl text-lg font-bold">Pergunta na mesa, voto secreto e ranking sem misericordia.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -131,6 +134,159 @@ function CreateRoom() {
           <Button disabled={loading}>{loading ? 'Criando...' : 'Criar sala'}</Button>
         </form>
       </Card>
+    </Shell>
+  );
+}
+
+function Admin() {
+  const emptyForm = { text: '', category: 'geral', level: 'leve' };
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editing, setEditing] = useState(emptyForm);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    setError('');
+    try {
+      setQuestions(await gameApi.listQuestions(true));
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function createQuestion(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    if (!form.text.trim()) return setError('Informe a pergunta.');
+    try {
+      await gameApi.createQuestion({ ...form, text: form.text.trim() });
+      setForm(emptyForm);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  function startEdit(question: Question) {
+    setEditingId(question.id);
+    setEditing({ text: question.text, category: question.category, level: question.level });
+  }
+
+  async function saveEdit(question: Question) {
+    setError('');
+    if (!editing.text.trim()) return setError('Informe a pergunta.');
+    try {
+      await gameApi.updateQuestion(question.id, { ...editing, text: editing.text.trim(), isActive: question.isActive });
+      setEditingId(null);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function toggleQuestion(question: Question) {
+    setError('');
+    try {
+      if (question.isActive) {
+        await gameApi.deactivateQuestion(question.id);
+      } else {
+        await gameApi.updateQuestion(question.id, { isActive: true });
+      }
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  return (
+    <Shell>
+      <section className="grid gap-4">
+        <div className="rounded-lg border-2 border-ink bg-gold p-5 shadow-crisp">
+          <h1 className="text-3xl font-black">Admin</h1>
+          <p className="mt-2 font-bold">Gerencie as perguntas do Quem fez isso? Who Did It?</p>
+        </div>
+        <ErrorMessage message={error} />
+        <Card>
+          <form onSubmit={createQuestion} className="grid gap-4">
+            <h2 className="text-2xl font-black">Nova pergunta</h2>
+            <Field label="Pergunta">
+              <Input value={form.text} onChange={(event) => setForm({ ...form, text: event.target.value })} placeholder="Quem mais provavelmente..." />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Categoria">
+                <Input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
+              </Field>
+              <Field label="Nivel">
+                <Select value={form.level} onChange={(event) => setForm({ ...form, level: event.target.value })}>
+                  <option value="leve">Leve</option>
+                  <option value="medio">Medio</option>
+                  <option value="pesado">Pesado</option>
+                  <option value="caos">Caos</option>
+                </Select>
+              </Field>
+            </div>
+            <Button type="submit"><Plus className="mr-2 inline" size={18} /> Adicionar</Button>
+          </form>
+        </Card>
+        <Card className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-2xl font-black">Perguntas</h2>
+            <span className="rounded-md bg-ink px-3 py-1 text-sm font-black text-white">{questions.length}</span>
+          </div>
+          {loading ? <Loading /> : null}
+          <div className="grid gap-3">
+            {questions.map((question) => (
+              <div key={question.id} className={`grid gap-3 rounded-md border-2 border-ink p-3 ${question.isActive ? 'bg-paper' : 'bg-zinc-200 opacity-75'}`}>
+                {editingId === question.id ? (
+                  <>
+                    <Input value={editing.text} onChange={(event) => setEditing({ ...editing, text: event.target.value })} />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input value={editing.category} onChange={(event) => setEditing({ ...editing, category: event.target.value })} />
+                      <Select value={editing.level} onChange={(event) => setEditing({ ...editing, level: event.target.value })}>
+                        <option value="leve">Leve</option>
+                        <option value="medio">Medio</option>
+                        <option value="pesado">Pesado</option>
+                        <option value="caos">Caos</option>
+                      </Select>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-black leading-snug">{question.text}</p>
+                    <div className="flex flex-wrap gap-2 text-sm font-black">
+                      <span className="rounded-md bg-white px-2 py-1">{question.category}</span>
+                      <span className="rounded-md bg-white px-2 py-1">{question.level}</span>
+                      <span className={`rounded-md px-2 py-1 ${question.isActive ? 'bg-teal text-white' : 'bg-zinc-500 text-white'}`}>
+                        {question.isActive ? 'Ativa' : 'Inativa'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="grid grid-cols-3 gap-2">
+                  {editingId === question.id ? (
+                    <Button type="button" onClick={() => saveEdit(question)}><Save size={18} /></Button>
+                  ) : (
+                    <Button type="button" variant="ghost" onClick={() => startEdit(question)}><Edit3 size={18} /></Button>
+                  )}
+                  <Button type="button" variant="secondary" onClick={() => toggleQuestion(question)}>
+                    {question.isActive ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setEditingId(null)}>OK</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </section>
     </Shell>
   );
 }
@@ -452,6 +608,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/admin" element={<Admin />} />
       <Route path="/create-room" element={<CreateRoom />} />
       <Route path="/room/:code/setup-players" element={<SetupPlayers />} />
       <Route path="/room/:code/lobby" element={<Lobby />} />

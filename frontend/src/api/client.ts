@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Room, Round, RoundResult, Player } from '../types/game';
+import type { Room, Round, RoundResult, Player, Question } from '../types/game';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
@@ -23,4 +23,9 @@ export const gameApi = {
     api.post(`/rounds/${roundId}/votes`, { voterPlayerId, votedPlayerId }).then((r) => r.data),
   result: (roundId: number) => api.get<RoundResult>(`/rounds/${roundId}/result`).then((r) => r.data),
   ranking: (code: string) => api.get<Player[]>(`/rooms/${code}/ranking`).then((r) => r.data),
+  listQuestions: (includeInactive = false) =>
+    api.get<Question[]>('/questions', { params: includeInactive ? { includeInactive: 1 } : {} }).then((r) => r.data),
+  createQuestion: (payload: Omit<Question, 'id' | 'isActive'>) => api.post<Question>('/questions', payload).then((r) => r.data),
+  updateQuestion: (id: number, payload: Partial<Omit<Question, 'id'>>) => api.patch<Question>(`/questions/${id}`, payload).then((r) => r.data),
+  deactivateQuestion: (id: number) => api.delete<Question>(`/questions/${id}`).then((r) => r.data),
 };
