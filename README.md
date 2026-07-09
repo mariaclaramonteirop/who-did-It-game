@@ -1,6 +1,6 @@
-# Jogo dos Culpados
+# Quem fez isso? Who Did It?
 
-Sistema web de party game com perguntas aleatorias, votacao entre amigos, contagem de votos, pontuacao por rodada e ranking final.
+Sistema web de party game com perguntas aleatorias, votacao entre amigos, contagem de votos, pontuacao por rodada, ranking final e administracao de perguntas.
 
 ## Stack
 
@@ -20,6 +20,7 @@ Sistema web de party game com perguntas aleatorias, votacao entre amigos, contag
 - Dar ponto para o mais votado, incluindo empates
 - Finalizar a partida quando alguem atingir a pontuacao maxima
 - Exibir ranking atualizado e tela final
+- Area admin para cadastrar, editar, ativar e desativar perguntas
 
 ## Como rodar
 
@@ -30,6 +31,7 @@ docker compose up --build
 Servicos:
 
 - Frontend: http://localhost:5173
+- Admin: http://localhost:5173/admin
 - Backend: http://localhost:8080
 - phpMyAdmin: http://localhost:8081
 - MySQL: localhost:3307
@@ -54,6 +56,8 @@ GET /rounds/{id}/result
 GET /rooms/{code}/ranking
 GET /questions
 POST /questions
+PATCH /questions/{id}
+DELETE /questions/{id}
 ```
 
 ## Exemplos
