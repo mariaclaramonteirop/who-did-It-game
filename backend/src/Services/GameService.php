@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DAO\PlayerDAO;
+use App\DAO\CategoryDAO;
 use App\DAO\QuestionDAO;
 use App\DAO\RoomDAO;
 use App\DAO\RoundDAO;
@@ -19,6 +20,7 @@ final class GameService
 {
     private RoomDAO $rooms;
     private PlayerDAO $players;
+    private CategoryDAO $categories;
     private QuestionDAO $questions;
     private RoundDAO $rounds;
     private VoteDAO $votes;
@@ -27,6 +29,8 @@ final class GameService
     {
         $this->rooms = new RoomDAO($db);
         $this->players = new PlayerDAO($db);
+        $this->categories = new CategoryDAO($db);
+        $this->categories->ensureSchema();
         $this->questions = new QuestionDAO($db);
         $this->rounds = new RoundDAO($db);
         $this->votes = new VoteDAO($db);
@@ -54,7 +58,7 @@ final class GameService
             'maxScore' => $maxScore,
             'gameMode' => $payload['gameMode'] ?? 'classic',
             'voteVisibility' => $payload['voteVisibility'] ?? 'anonymous',
-            'categoryFilter' => $payload['categoryFilter'] ?? 'all',
+            'categoryFilter' => $this->normalizeCategoryFilter($payload['categoryFilter'] ?? 'all'),
         ];
 
         return $this->formatRoom($this->rooms->create($data, $this->generateCode()));
@@ -305,6 +309,71 @@ final class GameService
         return $this->formatQuestion($this->questions->setActive($id, $isActive));
     }
 
+    public function listCategories(bool $includeInactive = false): array
+    {
+        return array_map(fn (array $category) => $this->formatCategory($category), $this->categories->list($includeInactive));
+    }
+
+    public function createCategory(array $payload): array
+    {
+        $name = trim((string) ($payload['name'] ?? ''));
+        $slug = $this->slugify((string) ($payload['slug'] ?? $name));
+        if ($name === '') {
+            throw new HttpException(422, 'Informe o nome da categoria.');
+        }
+        if ($slug === '') {
+            throw new HttpException(422, 'Informe um identificador valido para a categoria.');
+        }
+        if ($this->categories->findBySlug($slug) !== null) {
+            throw new HttpException(409, 'Ja existe uma categoria com esse identificador.');
+        }
+
+        return $this->formatCategory($this->categories->create([
+            'slug' => $slug,
+            'name' => $name,
+        ]));
+    }
+
+    public function updateCategory(int $id, array $payload): array
+    {
+        $current = $this->categories->find($id);
+        if ($current === null) {
+            throw new HttpException(404, 'Categoria nao encontrada.');
+        }
+
+        $name = trim((string) ($payload['name'] ?? $current['name']));
+        $slug = $this->slugify((string) ($payload['slug'] ?? $current['slug']));
+        if ($name === '') {
+            throw new HttpException(422, 'Informe o nome da categoria.');
+        }
+        if ($slug === '') {
+            throw new HttpException(422, 'Informe um identificador valido para a categoria.');
+        }
+
+        $conflict = $this->categories->findBySlug($slug);
+        if ($conflict !== null && (int) $conflict['id'] !== $id) {
+            throw new HttpException(409, 'Ja existe uma categoria com esse identificador.');
+        }
+
+        $category = $this->categories->update($id, [
+            'slug' => $slug,
+            'name' => $name,
+            'isActive' => array_key_exists('isActive', $payload) ? (bool) $payload['isActive'] : (bool) $current['is_active'],
+        ]);
+
+        return $this->formatCategory($category);
+    }
+
+    public function deactivateCategory(int $id): array
+    {
+        $current = $this->categories->find($id);
+        if ($current === null) {
+            throw new HttpException(404, 'Categoria nao encontrada.');
+        }
+
+        return $this->formatCategory($this->categories->setActive($id, false));
+    }
+
     private function closeRound(array $round, int $roundId): void
     {
         $this->db->beginTransaction();
@@ -402,6 +471,16 @@ final class GameService
         ];
     }
 
+    private function formatCategory(array $category): array
+    {
+        return [
+            'id' => (int) $category['id'],
+            'slug' => $category['slug'],
+            'name' => $category['name'],
+            'isActive' => (bool) $category['is_active'],
+        ];
+    }
+
     public function parseQuestionsCsv(string $csv): array
     {
         $lines = preg_split('/\r\n|\n|\r/', trim($csv));
@@ -426,6 +505,24 @@ final class GameService
         }
 
         return $questions;
+    }
+
+    private function normalizeCategoryFilter(mixed $value): string
+    {
+        if (is_array($value)) {
+            $items = array_values(array_filter(array_map('trim', $value), fn (string $item) => $item !== ''));
+            return $items === [] ? 'all' : implode(',', $items);
+        }
+
+        $filter = trim((string) $value);
+        return $filter === '' ? 'all' : $filter;
+    }
+
+    private function slugify(string $value): string
+    {
+        $slug = strtolower(trim($value));
+        $slug = preg_replace('/[^a-z0-9]+/u', '-', $slug) ?? '';
+        return trim($slug, '-');
     }
 
     private function formatPlayers(array $players): array

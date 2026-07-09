@@ -37,8 +37,8 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={`min-h-12 rounded-md border-2 border-ink bg-white px-3 text-base ${props.className ?? ''}`} />;
 }
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-lg border-2 border-ink bg-white p-4 shadow-crisp ${className}`}>{children}</section>;
+export function Card({ children, className = '', ...props }: React.HTMLAttributes<HTMLElement> & { children: ReactNode }) {
+  return <section {...props} className={`rounded-lg border-2 border-ink bg-white p-4 shadow-crisp ${className}`}>{children}</section>;
 }
 
 export function ErrorMessage({ message }: { message?: string }) {

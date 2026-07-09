@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Routes;
 
 use App\Config\Database;
+use App\Controllers\CategoryController;
 use App\Controllers\QuestionController;
 use App\Controllers\RoomController;
 use App\Controllers\RoundController;
@@ -38,5 +39,10 @@ final class Routes
         $app->post('/questions/import', fn ($request, $response) => (new QuestionController($service()))->import($request, $response));
         $app->patch('/questions/{id}', fn ($request, $response, $args) => (new QuestionController($service()))->update($request, $response, $args));
         $app->delete('/questions/{id}', fn ($request, $response, $args) => (new QuestionController($service()))->deactivate($request, $response, $args));
+
+        $app->get('/categories', fn ($request, $response) => (new CategoryController($service()))->list($request, $response));
+        $app->post('/categories', fn ($request, $response) => (new CategoryController($service()))->create($request, $response));
+        $app->patch('/categories/{id}', fn ($request, $response, $args) => (new CategoryController($service()))->update($request, $response, $args));
+        $app->delete('/categories/{id}', fn ($request, $response, $args) => (new CategoryController($service()))->deactivate($request, $response, $args));
     }
 }

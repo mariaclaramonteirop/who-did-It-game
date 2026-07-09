@@ -1,3 +1,11 @@
+INSERT INTO categories (slug, name) VALUES
+('amizade', 'Amizade'),
+('cotidiano', 'Cotidiano'),
+('festa', 'Festa'),
+('aventura', 'Aventura'),
+('caos', 'Caos'),
+('geral', 'Geral');
+
 INSERT INTO questions (text, category, level) VALUES
 ('Quem mais provavelmente chegaria atrasado ate no proprio aniversario?', 'amizade', 'leve'),
 ('Quem mais provavelmente faria drama por uma coisa minima?', 'amizade', 'leve'),

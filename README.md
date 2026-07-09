@@ -22,6 +22,8 @@ Sistema web de party game com perguntas aleatorias, votacao entre amigos, contag
 - Exibir ranking atualizado e tela final
 - Area admin para cadastrar, editar, ativar e desativar perguntas
 - Importacao em lote de perguntas via CSV ou JSON no admin
+- Cadastro e gerenciamento de categorias no admin
+- Selecao de uma ou mais categorias ao criar sala
 
 ## Como rodar
 
@@ -45,7 +47,7 @@ O admin nao aparece na navegacao do jogo. Ele deve ser acessado diretamente por 
 http://localhost:5173/admin
 ```
 
-No MVP, o admin gerencia perguntas e mostra graficos simples por status, categoria e nivel.
+No MVP, o admin gerencia perguntas, categorias e mostra graficos simples por status, categoria e nivel.
 Tambem aceita importacao em lote por arquivo CSV/JSON ou por CSV colado no formulario.
 
 Credenciais do banco:
@@ -71,6 +73,10 @@ POST /questions
 PATCH /questions/{id}
 DELETE /questions/{id}
 POST /questions/import
+GET /categories
+POST /categories
+PATCH /categories/{id}
+DELETE /categories/{id}
 ```
 
 ## Exemplos
@@ -84,7 +90,7 @@ Criar sala:
   "maxScore": 5,
   "gameMode": "classic",
   "voteVisibility": "anonymous",
-  "categoryFilter": "all"
+  "categoryFilter": ["festa", "caos"]
 }
 ```
 
@@ -117,6 +123,15 @@ O endpoint `POST /questions/import` aceita:
 - upload de arquivo `.csv` ou `.json`
 - JSON com `questions: []`
 - CSV bruto em `csv`
+
+Criar categoria:
+
+```json
+{
+  "name": "Festa",
+  "slug": "festa"
+}
+```
 ```
 
 ## Estrutura
@@ -138,8 +153,5 @@ docker-compose.yml
 
 ## Proximos passos
 
-- Cadastrar categorias/generos pelo admin em vez de usar texto livre.
-- Associar perguntas a categorias cadastradas.
-- Permitir escolher categorias/generos ao criar a sala.
-- Sortear perguntas respeitando as categorias selecionadas na partida.
-- Permitir categorias/generos com gestão propria e filtro na criacao da sala.
+- Migrar perguntas antigas para categorias cadastradas quando houver padronizacao final dos nomes.
+- Permitir selecionar categorias por checkbox em vez de select multiplo.

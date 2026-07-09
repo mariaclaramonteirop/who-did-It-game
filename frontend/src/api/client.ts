@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Room, Round, RoundResult, Player, Question } from '../types/game';
+import type { Room, Round, RoundResult, Player, Question, Category } from '../types/game';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
@@ -34,4 +34,10 @@ export const gameApi = {
     return api.post('/questions/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);
   },
   importQuestionsCsv: (csv: string) => api.post('/questions/import', { csv }).then((r) => r.data),
+  listCategories: (includeInactive = false) =>
+    api.get<Category[]>('/categories', { params: includeInactive ? { includeInactive: 1 } : {} }).then((r) => r.data),
+  createCategory: (payload: { name: string; slug?: string }) => api.post<Category>('/categories', payload).then((r) => r.data),
+  updateCategory: (id: number, payload: Partial<{ name: string; slug: string; isActive: boolean }>) =>
+    api.patch<Category>(`/categories/${id}`, payload).then((r) => r.data),
+  deactivateCategory: (id: number) => api.delete<Category>(`/categories/${id}`).then((r) => r.data),
 };

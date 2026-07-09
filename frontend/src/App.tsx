@@ -4,7 +4,7 @@ import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Sav
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
-import type { Player, Question, Room, Round, RoundResult } from './types/game';
+import type { Category, Player, Question, Room, Round, RoundResult } from './types/game';
 
 const roundKey = (code: string) => `jdc-round-${code}`;
 
@@ -61,17 +61,22 @@ function Home() {
 }
 
 function CreateRoom() {
+  const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState({
     name: 'Noite de Jogos',
     maxPlayers: 6,
     maxScore: 5,
     gameMode: 'classic',
     voteVisibility: 'anonymous',
-    categoryFilter: 'all',
+    categoryFilter: [] as string[],
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    gameApi.listCategories().then(setCategories).catch(() => setCategories([]));
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -119,16 +124,19 @@ function CreateRoom() {
               </Select>
             </Field>
             <Field label="Categoria">
-              <Select value={form.categoryFilter} onChange={(e) => setForm({ ...form, categoryFilter: e.target.value })}>
-                <option value="all">Todas</option>
-                <option value="amizade">Amizade</option>
-                <option value="cotidiano">Cotidiano</option>
-                <option value="festa">Festa</option>
-                <option value="aventura">Aventura</option>
-                <option value="caos">Caos</option>
+              <Select
+                multiple
+                value={form.categoryFilter}
+                onChange={(e) => setForm({ ...form, categoryFilter: Array.from(e.target.selectedOptions).map((option) => option.value) })}
+                className="min-h-32"
+              >
+                {categories.filter((category) => category.isActive).map((category) => (
+                  <option key={category.id} value={category.slug}>{category.name}</option>
+                ))}
               </Select>
             </Field>
           </div>
+          <p className="text-sm font-bold">Sem seleção, a sala usa todas as categorias.</p>
           <Button disabled={loading}>{loading ? 'Criando...' : 'Criar sala'}</Button>
         </form>
       </Card>
@@ -139,11 +147,15 @@ function CreateRoom() {
 function Admin() {
   const emptyForm = { text: '', category: 'geral', level: 'leve' };
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rolê?,festa,leve\nQuem fez isso no improviso?,caos,medio');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editing, setEditing] = useState(emptyForm);
+  const [categoryForm, setCategoryForm] = useState({ name: '', slug: '' });
+  const [categoryEditingId, setCategoryEditingId] = useState<number | null>(null);
+  const [categoryEditing, setCategoryEditing] = useState({ name: '', slug: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const activeCount = questions.filter((question) => question.isActive).length;
@@ -155,7 +167,12 @@ function Admin() {
     setLoading(true);
     setError('');
     try {
-      setQuestions(await gameApi.listQuestions(true));
+      const [loadedQuestions, loadedCategories] = await Promise.all([
+        gameApi.listQuestions(true),
+        gameApi.listCategories(true),
+      ]);
+      setQuestions(loadedQuestions);
+      setCategories(loadedCategories);
     } catch (err) {
       setError(apiError(err));
     } finally {
@@ -238,6 +255,53 @@ function Admin() {
     }
   }
 
+  async function createCategory(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    if (!categoryForm.name.trim()) return setError('Informe o nome da categoria.');
+    try {
+      await gameApi.createCategory({ name: categoryForm.name.trim(), slug: categoryForm.slug.trim() || undefined });
+      setCategoryForm({ name: '', slug: '' });
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  function startCategoryEdit(category: Category) {
+    setCategoryEditingId(category.id);
+    setCategoryEditing({ name: category.name, slug: category.slug });
+  }
+
+  async function saveCategoryEdit(category: Category) {
+    setError('');
+    if (!categoryEditing.name.trim()) return setError('Informe o nome da categoria.');
+    try {
+      await gameApi.updateCategory(category.id, {
+        name: categoryEditing.name.trim(),
+        slug: categoryEditing.slug.trim(),
+      });
+      setCategoryEditingId(null);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function toggleCategory(category: Category) {
+    setError('');
+    try {
+      if (category.isActive) {
+        await gameApi.deactivateCategory(category.id);
+      } else {
+        await gameApi.updateCategory(category.id, { isActive: true });
+      }
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
   return (
     <Shell>
       <section className="grid gap-4">
@@ -245,8 +309,14 @@ function Admin() {
           <h1 className="text-3xl font-black">Admin</h1>
           <p className="mt-2 font-bold">Gerencie as perguntas do Quem fez isso? Who Did It?</p>
         </div>
+        <div className="grid gap-2 sm:grid-cols-4">
+          <button type="button" onClick={() => document.getElementById('admin-questions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Perguntas</button>
+          <button type="button" onClick={() => document.getElementById('admin-categories')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Categorias</button>
+          <button type="button" onClick={() => document.getElementById('admin-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Importar</button>
+          <button type="button" onClick={() => document.getElementById('admin-stats')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Graficos</button>
+        </div>
         <ErrorMessage message={error} />
-        <Card>
+        <Card id="admin-questions">
           <form onSubmit={createQuestion} className="grid gap-4">
             <h2 className="text-2xl font-black">Nova pergunta</h2>
             <Field label="Pergunta">
@@ -254,7 +324,15 @@ function Admin() {
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Categoria">
-                <Input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
+                {categories.filter((category) => category.isActive).length > 0 ? (
+                  <Select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+                    {categories.filter((category) => category.isActive).map((category) => (
+                      <option key={category.id} value={category.slug}>{category.name}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
+                )}
               </Field>
               <Field label="Nivel">
                 <Select value={form.level} onChange={(event) => setForm({ ...form, level: event.target.value })}>
@@ -268,7 +346,78 @@ function Admin() {
             <Button type="submit"><Plus className="mr-2 inline" size={18} /> Adicionar</Button>
           </form>
         </Card>
-        <Card className="grid gap-4">
+        <Card id="admin-categories" className="grid gap-4">
+          <h2 className="text-2xl font-black">Categorias</h2>
+          <form onSubmit={createCategory} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+            <Field label="Nome">
+              <Input
+                value={categoryForm.name}
+                onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })}
+                placeholder="Ex: Festa"
+              />
+            </Field>
+            <Field label="Slug (opcional)">
+              <Input
+                value={categoryForm.slug}
+                onChange={(event) => setCategoryForm({ ...categoryForm, slug: event.target.value })}
+                placeholder="Ex: festa"
+              />
+            </Field>
+            <Button type="submit" className="self-end"><Plus className="mr-2 inline" size={18} /> Adicionar</Button>
+          </form>
+          <div className="grid gap-3">
+            {categories.map((category) => (
+              <div
+                key={category.id}
+                className={`grid gap-3 rounded-md border-2 border-ink p-3 ${category.isActive ? 'bg-paper' : 'bg-zinc-200 opacity-75'}`}
+              >
+                {categoryEditingId === category.id ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      value={categoryEditing.name}
+                      onChange={(event) => setCategoryEditing({ ...categoryEditing, name: event.target.value })}
+                    />
+                    <Input
+                      value={categoryEditing.slug}
+                      onChange={(event) => setCategoryEditing({ ...categoryEditing, slug: event.target.value })}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-lg font-black leading-snug">{category.name}</p>
+                      <p className="text-sm font-bold text-zinc-700">slug: {category.slug}</p>
+                    </div>
+                    <span className={`rounded-md px-2 py-1 text-sm font-black ${category.isActive ? 'bg-teal text-white' : 'bg-zinc-500 text-white'}`}>
+                      {category.isActive ? 'Ativa' : 'Inativa'}
+                    </span>
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-2">
+                  {categoryEditingId === category.id ? (
+                    <Button type="button" onClick={() => saveCategoryEdit(category)}><Save size={18} /></Button>
+                  ) : (
+                    <Button type="button" variant="ghost" onClick={() => startCategoryEdit(category)}><Edit3 size={18} /></Button>
+                  )}
+                  <Button type="button" variant="secondary" onClick={() => toggleCategory(category)}>
+                    {category.isActive ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setCategoryEditingId(null);
+                      setCategoryEditing({ name: '', slug: '' });
+                    }}
+                  >
+                    OK
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card id="admin-import" className="grid gap-4">
           <h2 className="text-2xl font-black">Importar perguntas</h2>
           <p className="font-bold">Formato aceito no CSV: `text,category,level`.</p>
           <form onSubmit={importFromFile} className="grid gap-3">
@@ -289,7 +438,7 @@ function Admin() {
             <Button type="submit">Importar CSV</Button>
           </form>
         </Card>
-        <Card className="grid gap-4">
+        <Card id="admin-stats" className="grid gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-black">Graficos</h2>
             <span className="rounded-md bg-ink px-3 py-1 text-sm font-black text-white">{questions.length} perguntas</span>

@@ -79,7 +79,15 @@ final class QuestionDAO
 
     public function randomUnusedForRoom(int $roomId, string $categoryFilter): ?array
     {
-        $categorySql = $categoryFilter === 'all' ? '' : 'AND q.category = :category';
+        $categories = array_values(array_filter(array_map('trim', explode(',', $categoryFilter)), fn (string $item) => $item !== '' && $item !== 'all'));
+        $categorySql = '';
+        if ($categories !== []) {
+            $placeholders = [];
+            foreach ($categories as $index => $category) {
+                $placeholders[] = ':category' . $index;
+            }
+            $categorySql = 'AND q.category IN (' . implode(',', $placeholders) . ')';
+        }
         $stmt = $this->db->prepare(
             "SELECT q.* FROM questions q
              WHERE q.is_active = 1
@@ -89,8 +97,8 @@ final class QuestionDAO
              LIMIT 1"
         );
         $params = ['room_id' => $roomId];
-        if ($categoryFilter !== 'all') {
-            $params['category'] = $categoryFilter;
+        foreach ($categories as $index => $category) {
+            $params['category' . $index] = $category;
         }
         $stmt->execute($params);
         return $stmt->fetch() ?: null;

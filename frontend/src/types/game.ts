@@ -50,3 +50,10 @@ export type Question = {
   level: string;
   isActive: boolean;
 };
+
+export type Category = {
+  id: number;
+  slug: string;
+  name: string;
+  isActive: boolean;
+};
