@@ -50,6 +50,12 @@ final class AdminController
         return JsonResponse::send($response, $this->service->adminListPlayers());
     }
 
+    public function createPlayer(Request $request, Response $response): Response
+    {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'players');
+        return JsonResponse::send($response, $this->service->adminCreatePlayer((array) $request->getParsedBody()), 201);
+    }
+
     public function updatePlayer(Request $request, Response $response, array $args): Response
     {
         $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'players');

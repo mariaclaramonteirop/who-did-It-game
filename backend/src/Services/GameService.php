@@ -564,6 +564,45 @@ final class GameService
         return array_map(fn (array $player) => $this->formatAdminPlayer($player), $this->players->listAll());
     }
 
+    public function adminCreatePlayer(array $payload): array
+    {
+        $roomCode = strtoupper(trim((string) ($payload['roomCode'] ?? '')));
+        $name = trim((string) ($payload['name'] ?? ''));
+        $score = max(0, (int) ($payload['score'] ?? 0));
+        $isHost = (bool) ($payload['isHost'] ?? false);
+
+        if ($roomCode === '') {
+            throw new HttpException(422, 'Informe o codigo da sala.');
+        }
+        if ($name === '') {
+            throw new HttpException(422, 'Informe o nome do usuario.');
+        }
+
+        $room = $this->requireRoom($roomCode);
+        $currentPlayers = $this->players->listByRoom((int) $room['id']);
+        foreach ($currentPlayers as $player) {
+            if (strtolower($player['name']) === strtolower($name)) {
+                throw new HttpException(409, 'Ja existe um jogador com esse nome na sala.');
+            }
+        }
+
+        $player = $this->players->create((int) $room['id'], $name, $isHost || $currentPlayers === [], null);
+        if ($score > 0) {
+            $this->players->update((int) $player['id'], [
+                'name' => $player['name'],
+                'score' => $score,
+                'isHost' => (bool) $player['is_host'],
+            ]);
+            $player = $this->players->find((int) $player['id']);
+        }
+
+        if ($room['status'] === Room::WAITING_PLAYERS && count($currentPlayers) + 1 >= 3) {
+            $this->rooms->updateStatus((int) $room['id'], Room::READY);
+        }
+
+        return $this->formatAdminPlayer($player);
+    }
+
     public function adminUpdatePlayer(int $id, array $payload): array
     {
         $current = $this->players->find($id);

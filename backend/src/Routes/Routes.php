@@ -39,6 +39,7 @@ final class Routes
         $app->patch('/admin/rooms/{id}', fn ($request, $response, $args) => (new AdminController($service()))->updateRoom($request, $response, $args));
         $app->delete('/admin/rooms/{id}', fn ($request, $response, $args) => (new AdminController($service()))->deleteRoom($request, $response, $args));
         $app->get('/admin/players', fn ($request, $response) => (new AdminController($service()))->players($request, $response));
+        $app->post('/admin/players', fn ($request, $response) => (new AdminController($service()))->createPlayer($request, $response));
         $app->patch('/admin/players/{id}', fn ($request, $response, $args) => (new AdminController($service()))->updatePlayer($request, $response, $args));
         $app->delete('/admin/players/{id}', fn ($request, $response, $args) => (new AdminController($service()))->deletePlayer($request, $response, $args));
         $app->get('/admin/users', fn ($request, $response) => (new AdminController($service()))->users($request, $response));

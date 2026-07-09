@@ -681,6 +681,7 @@ function Admin() {
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '' });
   const [categoryEditingId, setCategoryEditingId] = useState<number | null>(null);
   const [categoryEditing, setCategoryEditing] = useState({ name: '', slug: '' });
+  const [adminPlayerForm, setAdminPlayerForm] = useState({ roomCode: '', name: '', score: 0, isHost: false });
   const [adminForm, setAdminForm] = useState({ username: '', name: '', password: '', role: 'manager', permissions: ['questions', 'categories'] });
   const [adminPasswords, setAdminPasswords] = useState<Record<number, string>>({});
   const [error, setError] = useState('');
@@ -917,6 +918,25 @@ function Admin() {
     try {
       await gameApi.createAdminUser(token, adminForm);
       setAdminForm({ username: '', name: '', password: '', role: 'manager', permissions: ['questions', 'categories'] });
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function createAdminPlayer(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    if (!adminPlayerForm.roomCode.trim()) return setError('Informe o codigo da sala.');
+    if (!adminPlayerForm.name.trim()) return setError('Informe o nome do usuario.');
+    try {
+      await gameApi.createAdminPlayer(token, {
+        roomCode: adminPlayerForm.roomCode.trim(),
+        name: adminPlayerForm.name.trim(),
+        score: Math.max(0, adminPlayerForm.score),
+        isHost: adminPlayerForm.isHost,
+      });
+      setAdminPlayerForm({ roomCode: adminPlayerForm.roomCode.trim(), name: '', score: 0, isHost: false });
       load();
     } catch (err) {
       setError(apiError(err));
@@ -1221,6 +1241,44 @@ function Admin() {
         {activeTab === 'players' ? (
         <Card className="grid gap-3">
           <h2 className="text-2xl font-black">Usuarios do jogo</h2>
+          <form onSubmit={createAdminPlayer} className="grid gap-3 rounded-md border-2 border-ink bg-white p-3">
+            <p className="text-sm font-black uppercase text-zinc-600">Novo usuario</p>
+            <div className="grid gap-3 md:grid-cols-[140px_1fr_120px_auto]">
+              <Field label="Sala">
+                <Input
+                  value={adminPlayerForm.roomCode}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, roomCode: event.target.value })}
+                  placeholder="4821"
+                />
+              </Field>
+              <Field label="Nome">
+                <Input
+                  value={adminPlayerForm.name}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, name: event.target.value })}
+                  placeholder="Maria"
+                />
+              </Field>
+              <Field label="Score">
+                <Input
+                  type="number"
+                  min={0}
+                  value={adminPlayerForm.score}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, score: Number(event.target.value) })}
+                />
+              </Field>
+              <label className="flex items-center gap-2 rounded-md border-2 border-ink bg-paper px-3 py-2 font-black">
+                <input
+                  type="checkbox"
+                  checked={adminPlayerForm.isHost}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, isHost: event.target.checked })}
+                />
+                Host
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit">Adicionar usuario</Button>
+            </div>
+          </form>
           {players.length === 0 ? <p className="font-bold">Nenhum usuario encontrado.</p> : null}
           {players.map((player) => (
             <div key={player.id} className="grid gap-3 rounded-md border-2 border-ink bg-paper p-3">

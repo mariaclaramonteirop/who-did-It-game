@@ -58,6 +58,8 @@ export const gameApi = {
     api.patch<AdminRoom>(`/admin/rooms/${id}`, payload, auth(token)).then((r) => r.data),
   deleteAdminRoom: (token: string, id: number) => api.delete(`/admin/rooms/${id}`, auth(token)).then((r) => r.data),
   adminPlayers: (token: string) => api.get<AdminPlayer[]>('/admin/players', auth(token)).then((r) => r.data),
+  createAdminPlayer: (token: string, payload: { roomCode: string; name: string; score: number; isHost: boolean }) =>
+    api.post<AdminPlayer>('/admin/players', payload, auth(token)).then((r) => r.data),
   updateAdminPlayer: (token: string, id: number, payload: Partial<AdminPlayer>) =>
     api.patch<Player>(`/admin/players/${id}`, payload, auth(token)).then((r) => r.data),
   deleteAdminPlayer: (token: string, id: number) => api.delete(`/admin/players/${id}`, auth(token)).then((r) => r.data),
