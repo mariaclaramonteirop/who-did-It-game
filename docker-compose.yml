@@ -16,6 +16,7 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: admin123
       ADMIN_SECRET: quem-fez-isso-local
+      PLAYER_SECRET: quem-fez-isso-player-local
 
   frontend:
     build: ./frontend

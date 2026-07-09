@@ -1,13 +1,47 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Users } from 'lucide-react';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
 import { VisitorMode } from './visitor/VisitorMode';
-import type { AdminDashboard, AdminPlayer, AdminRoom, AdminUser, Category, Player, Question, Room, Round, RoundResult } from './types/game';
+import type { AdminDashboard, AdminPlayer, AdminRoom, AdminUser, Category, Player, PlayerAccount, Question, Room, Round, RoundResult } from './types/game';
 
 const roundKey = (code: string) => `jdc-round-${code}`;
+const PLAYER_TOKEN_KEY = 'jdc-player-token';
+const PLAYER_USER_KEY = 'jdc-player-user';
+
+function loadPlayerToken() {
+  return localStorage.getItem(PLAYER_TOKEN_KEY) ?? '';
+}
+
+function loadPlayerUser() {
+  const raw = localStorage.getItem(PLAYER_USER_KEY);
+  return raw ? (JSON.parse(raw) as PlayerAccount) : null;
+}
+
+function savePlayerSession(token: string, user: PlayerAccount) {
+  localStorage.setItem(PLAYER_TOKEN_KEY, token);
+  localStorage.setItem(PLAYER_USER_KEY, JSON.stringify(user));
+}
+
+function clearPlayerSession() {
+  localStorage.removeItem(PLAYER_TOKEN_KEY);
+  localStorage.removeItem(PLAYER_USER_KEY);
+}
+
+function buildNextPath(pathname: string, search: string) {
+  return encodeURIComponent(`${pathname}${search}`);
+}
+
+function RequirePlayerSession({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const token = loadPlayerToken();
+  if (!token) {
+    return <Navigate to={`/acesso?next=${buildNextPath(location.pathname, location.search)}`} replace />;
+  }
+  return <>{children}</>;
+}
 
 function Shell({ children }: { children: ReactNode }) {
   return (
@@ -26,10 +60,17 @@ function Shell({ children }: { children: ReactNode }) {
 function Home() {
   const [code, setCode] = useState('');
   const navigate = useNavigate();
+  const token = loadPlayerToken();
+  const user = loadPlayerUser();
 
   function enterRoom(event: FormEvent) {
     event.preventDefault();
-    if (code.trim()) navigate(`/room/${code.trim()}/lobby`);
+    if (!code.trim()) return;
+    if (!token) {
+      navigate(`/acesso?next=${encodeURIComponent(`/room/${code.trim()}/lobby`)}`);
+      return;
+    }
+    navigate(`/room/${code.trim()}/lobby`);
   }
 
   return (
@@ -44,16 +85,20 @@ function Home() {
             </div>
           </div>
           <p className="max-w-xl text-lg font-bold">Pergunta na mesa, voto secreto e ranking sem misericordia.</p>
+          {token && user ? (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => navigate('/painel')}>Abrir painel</Button>
+              <Button type="button" onClick={() => navigate('/create-room')}>Criar sala</Button>
+              <Button type="button" variant="ghost" onClick={() => { clearPlayerSession(); navigate('/'); }}>Sair</Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => navigate('/acesso')}>Entrar</Button>
+              <Button type="button" variant="secondary" onClick={() => navigate('/cadastro')}>Cadastrar</Button>
+            </div>
+          )}
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card className="grid content-between gap-4">
-            <Users size={36} className="text-tomato" />
-            <h2 className="text-2xl font-black">Logar</h2>
-            <p className="font-bold">Entrar com numero da sala e jogar conectado.</p>
-            <Button onClick={() => navigate('/create-room')}>
-              Criar <ArrowRight className="ml-2 inline" size={18} />
-            </Button>
-          </Card>
+        <div className="grid gap-4 sm:grid-cols-2">
           <Card>
             <form onSubmit={enterRoom} className="grid gap-4">
               <h2 className="text-2xl font-black">Entrar na sala</h2>
@@ -63,24 +108,233 @@ function Home() {
               <Button type="submit" variant="secondary">Abrir sala</Button>
             </form>
           </Card>
-          <Card className="grid content-between gap-4">
-            <div className="grid gap-2">
-              <Users size={36} className="text-tomato" />
-              <h2 className="text-2xl font-black">Modo visitante</h2>
-              <p className="font-bold">Sem login e sem backend, com jogo local no navegador.</p>
-            </div>
-            <Button onClick={() => navigate('/visitante')}>
-              Entrar <ArrowRight className="ml-2 inline" size={18} />
-            </Button>
-          </Card>
+          {!token ? (
+            <Card className="grid content-between gap-4">
+              <div className="grid gap-2">
+                <Users size={36} className="text-tomato" />
+                <h2 className="text-2xl font-black">Modo visitante</h2>
+                <p className="font-bold">Sem login e sem backend, com jogo local no navegador.</p>
+              </div>
+              <Button onClick={() => navigate('/visitante')}>
+                Entrar <ArrowRight className="ml-2 inline" size={18} />
+              </Button>
+            </Card>
+          ) : null}
         </div>
       </section>
     </Shell>
   );
 }
 
+function PlayerPanel() {
+  const navigate = useNavigate();
+  const token = loadPlayerToken();
+  const storedUser = loadPlayerUser();
+  const [user, setUser] = useState<PlayerAccount | null>(storedUser);
+  const [profile, setProfile] = useState({
+    username: storedUser?.username ?? '',
+    email: storedUser?.email ?? '',
+    name: storedUser?.name ?? '',
+    password: '',
+  });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    if (user) {
+      setProfile({
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        password: '',
+      });
+    }
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/acesso', { replace: true });
+    }
+  }, [token, navigate]);
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    if (!token) return;
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const updated = await gameApi.updatePlayerProfile(token, profile);
+      savePlayerSession(token, updated);
+      setUser(updated);
+      setProfile((current) => ({ ...current, password: '' }));
+      setSuccess('Perfil atualizado.');
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!token || !user) {
+    return <Shell><Loading /></Shell>;
+  }
+
+  return (
+    <Shell>
+      <section className="grid gap-4">
+        <Card className="grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black uppercase text-zinc-600">Painel do jogador</p>
+              <h1 className="text-3xl font-black">Ola, {user.name}</h1>
+              <p className="font-bold">{user.username} · {user.email}</p>
+            </div>
+            <Button type="button" variant="ghost" onClick={() => navigate('/')}>Voltar</Button>
+          </div>
+          <form onSubmit={saveProfile} className="grid gap-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Usuario">
+                <Input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value })} />
+              </Field>
+              <Field label="Email">
+                <Input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
+              </Field>
+            </div>
+            <Field label="Nome">
+              <Input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} />
+            </Field>
+            <Field label="Nova senha">
+              <Input type="password" value={profile.password} onChange={(event) => setProfile({ ...profile, password: event.target.value })} placeholder="Deixe vazio para manter a senha" />
+            </Field>
+            <ErrorMessage message={error} />
+            {success ? <p className="font-bold text-teal">{success}</p> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar perfil'}</Button>
+              <Button type="button" onClick={() => navigate('/create-room')}>Criar sala</Button>
+              <Button type="button" variant="secondary" onClick={() => navigate('/acesso')}>Entrar na sala</Button>
+              <Button type="button" variant="ghost" onClick={() => { clearPlayerSession(); navigate('/'); }}>Sair</Button>
+            </div>
+          </form>
+        </Card>
+      </section>
+    </Shell>
+  );
+}
+
+function AuthPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const next = new URLSearchParams(location.search).get('next') ?? '/';
+  const [form, setForm] = useState({ identifier: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const session = await gameApi.login(form);
+      savePlayerSession(session.token, session.user);
+      navigate(next, { replace: true });
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Shell>
+      <Card className="grid gap-4">
+        <div className="grid gap-2">
+          <h1 className="text-3xl font-black">Entrar</h1>
+          <p className="font-bold">Use email ou nome de usuario para acessar as salas.</p>
+        </div>
+        <ErrorMessage message={error} />
+        <form onSubmit={submit} className="grid gap-4">
+          <Field label="Email ou usuario">
+            <Input value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} />
+          </Field>
+          <Field label="Senha">
+            <Input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          </Field>
+          <Button disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</Button>
+        </form>
+        <p className="font-bold">
+          Nao tem conta?{' '}
+          <button type="button" className="underline" onClick={() => navigate(`/cadastro?next=${encodeURIComponent(next)}`)}>
+            Cadastrar
+          </button>
+        </p>
+      </Card>
+    </Shell>
+  );
+}
+
+function RegisterPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const next = new URLSearchParams(location.search).get('next') ?? '/';
+  const [form, setForm] = useState({ username: '', email: '', name: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const session = await gameApi.register(form);
+      savePlayerSession(session.token, session.user);
+      navigate(next, { replace: true });
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Shell>
+      <Card className="grid gap-4">
+        <div className="grid gap-2">
+          <h1 className="text-3xl font-black">Cadastrar</h1>
+          <p className="font-bold">Crie sua conta para acessar as salas com sessao.</p>
+        </div>
+        <ErrorMessage message={error} />
+        <form onSubmit={submit} className="grid gap-4">
+          <Field label="Nome de usuario">
+            <Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+          </Field>
+          <Field label="Email">
+            <Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          </Field>
+          <Field label="Nome">
+            <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          </Field>
+          <Field label="Senha">
+            <Input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          </Field>
+          <Button disabled={loading}>{loading ? 'Cadastrando...' : 'Cadastrar'}</Button>
+        </form>
+        <p className="font-bold">
+          Ja tem conta?{' '}
+          <button type="button" className="underline" onClick={() => navigate(`/acesso?next=${encodeURIComponent(next)}`)}>
+            Entrar
+          </button>
+        </p>
+      </Card>
+    </Shell>
+  );
+}
+
 function CreateRoom() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const token = loadPlayerToken();
   const [form, setForm] = useState({
     name: 'Noite de Jogos',
     maxPlayers: 6,
@@ -102,7 +356,7 @@ function CreateRoom() {
     setLoading(true);
     setError('');
     try {
-      const room = await gameApi.createRoom(form);
+      const room = await gameApi.createRoom(token, form);
       navigate(`/room/${room.code}/setup-players`);
     } catch (err) {
       setError(apiError(err));
@@ -155,7 +409,7 @@ function CreateRoom() {
               </Select>
             </Field>
           </div>
-          <p className="text-sm font-bold">Sem seleção, a sala usa todas as categorias.</p>
+          <p className="text-sm font-bold">Sem seleÃ§Ã£o, a sala usa todas as categorias.</p>
           <Button disabled={loading}>{loading ? 'Criando...' : 'Criar sala'}</Button>
         </form>
       </Card>
@@ -180,7 +434,7 @@ function Admin() {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [filters, setFilters] = useState({ search: '', category: 'all', level: 'all', status: 'all' });
-  const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rolê?,festa,leve\nQuem fez isso no improviso?,caos,medio');
+  const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rolÃª?,festa,leve\nQuem fez isso no improviso?,caos,medio');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editing, setEditing] = useState(emptyForm);
@@ -639,7 +893,7 @@ function Admin() {
                     <div>
                       <p className="text-lg font-black leading-snug">{category.name}</p>
                       <p className="text-sm font-bold text-zinc-700">slug: {category.slug}</p>
-                      <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(category.createdAt)} · Atualizada em {formatAdminDate(category.updatedAt)}</p>
+                      <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(category.createdAt)} Â· Atualizada em {formatAdminDate(category.updatedAt)}</p>
                     </div>
                     <span className={`rounded-md px-2 py-1 text-sm font-black ${category.isActive ? 'bg-teal text-white' : 'bg-zinc-500 text-white'}`}>
                       {category.isActive ? 'Ativa' : 'Inativa'}
@@ -704,7 +958,7 @@ function Admin() {
                 <span>{room.code} - {room.name}</span>
                 <span>{room.playersCount} jogador(es)</span>
               </div>
-              <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(room.createdAt)} · Atualizada em {formatAdminDate(room.updatedAt)}</p>
+              <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(room.createdAt)} Â· Atualizada em {formatAdminDate(room.updatedAt)}</p>
               <div className="grid gap-2 sm:grid-cols-4">
                 <Input value={room.name} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, name: event.target.value } : item))} />
                 <Input type="number" value={room.maxPlayers} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, maxPlayers: Number(event.target.value) } : item))} />
@@ -731,7 +985,7 @@ function Admin() {
           {players.map((player) => (
             <div key={player.id} className="grid gap-3 rounded-md border-2 border-ink bg-paper p-3">
               <p className="font-black">Sala {player.roomCode} - {player.roomName}</p>
-              <p className="text-xs font-bold text-zinc-600">Cadastrado em {formatAdminDate(player.createdAt)} · Atualizado em {formatAdminDate(player.updatedAt)}</p>
+              <p className="text-xs font-bold text-zinc-600">Cadastrado em {formatAdminDate(player.createdAt)} Â· Atualizado em {formatAdminDate(player.updatedAt)}</p>
               <div className="grid gap-2 sm:grid-cols-3">
                 <Input value={player.name} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} />
                 <Input type="number" value={player.score} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, score: Number(event.target.value) } : item))} />
@@ -808,7 +1062,7 @@ function Admin() {
                   </label>
                 ))}
               </div>
-              <p className="text-xs font-bold text-zinc-600">Criado em {formatAdminDate(admin.createdAt)} · Atualizado em {formatAdminDate(admin.updatedAt)}</p>
+              <p className="text-xs font-bold text-zinc-600">Criado em {formatAdminDate(admin.createdAt)} Â· Atualizado em {formatAdminDate(admin.updatedAt)}</p>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
@@ -900,7 +1154,7 @@ function Admin() {
                 ) : (
                   <>
                     <p className="text-lg font-black leading-snug">{question.text}</p>
-                    <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(question.createdAt)} · Atualizada em {formatAdminDate(question.updatedAt)}</p>
+                    <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(question.createdAt)} Â· Atualizada em {formatAdminDate(question.updatedAt)}</p>
                     <div className="flex flex-wrap gap-2 text-sm font-black">
                       <span className="rounded-md bg-white px-2 py-1">{question.category}</span>
                       <span className="rounded-md bg-white px-2 py-1">{question.level}</span>
@@ -978,7 +1232,7 @@ function BarChart({ title, stats, total }: { title: string; stats: Array<{ label
           <div key={item.label} className="grid gap-1">
             <div className="flex justify-between gap-3 text-sm font-black">
               <span className="truncate">{item.label}</span>
-              <span>{item.value} · {percent}%</span>
+              <span>{item.value} Â· {percent}%</span>
             </div>
             <div className="h-4 overflow-hidden rounded-sm border-2 border-ink bg-white">
               <div className="h-full bg-tomato" style={{ width: `${percent}%` }} />
@@ -1003,7 +1257,7 @@ function RecentList({ title, items }: { title: string; items: Array<{ label: str
               <span className="text-zinc-600">{item.meta}</span>
             </div>
             <p className="mt-1 text-xs text-zinc-600">
-              Criado em {formatAdminDate(item.createdAt)} · Atualizado em {formatAdminDate(item.updatedAt)}
+              Criado em {formatAdminDate(item.createdAt)} Â· Atualizado em {formatAdminDate(item.updatedAt)}
             </p>
           </div>
         ))}
@@ -1013,6 +1267,7 @@ function RecentList({ title, items }: { title: string; items: Array<{ label: str
 }
 
 function useRoom(code?: string) {
+  const token = loadPlayerToken();
   const [room, setRoom] = useState<Room | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1022,7 +1277,7 @@ function useRoom(code?: string) {
     setLoading(true);
     setError('');
     try {
-      setRoom(await gameApi.getRoom(code));
+      setRoom(await gameApi.getRoom(token, code));
     } catch (err) {
       setError(apiError(err));
     } finally {
@@ -1040,54 +1295,34 @@ function useRoom(code?: string) {
 function SetupPlayers() {
   const { code = '' } = useParams();
   const { room, error, loading, reload } = useRoom(code);
-  const [name, setName] = useState('');
-  const [localError, setLocalError] = useState('');
   const navigate = useNavigate();
-
-  async function addPlayer(event: FormEvent) {
-    event.preventDefault();
-    setLocalError('');
-    const trimmed = name.trim();
-    if (!trimmed) return setLocalError('Informe um nome.');
-    if (room?.players?.some((player) => player.name.toLowerCase() === trimmed.toLowerCase())) {
-      return setLocalError('Nome repetido na sala.');
-    }
-    try {
-      await gameApi.addPlayer(code, trimmed);
-      setName('');
-      reload();
-    } catch (err) {
-      setLocalError(apiError(err));
-    }
-  }
+  const user = loadPlayerUser();
 
   if (loading) return <Shell><Loading /></Shell>;
   const players = room?.players ?? [];
 
   return (
     <Shell>
-      <ErrorMessage message={error || localError} />
+      <ErrorMessage message={error} />
       <Card className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-black">{room?.name}</h1>
             <p className="font-bold">Codigo {code}</p>
+            {user ? <p className="font-bold">Voce entrou como {user.name}.</p> : null}
           </div>
           <Button type="button" variant="ghost" onClick={() => navigator.clipboard?.writeText(code)}>
             <Copy size={18} />
           </Button>
         </div>
-        <form onSubmit={addPlayer} className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <Field label="Jogador">
-            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nome" />
-          </Field>
-          <Button className="self-end" type="submit"><Plus size={18} /></Button>
-        </form>
         <div className="grid gap-2">
           {players.map((player) => (
             <div key={player.id} className="rounded-md border-2 border-ink bg-paper px-3 py-2 font-black">{player.name}</div>
           ))}
         </div>
+        <Button variant="secondary" type="button" onClick={() => reload()}>
+          Atualizar lista
+        </Button>
         <Button disabled={players.length < 3} onClick={() => navigate(`/room/${code}/lobby`)}>
           Ir para lobby
         </Button>
@@ -1099,13 +1334,14 @@ function SetupPlayers() {
 function Lobby() {
   const { code = '' } = useParams();
   const { room, error, loading, reload } = useRoom(code);
+  const token = loadPlayerToken();
   const [actionError, setActionError] = useState('');
   const navigate = useNavigate();
 
   async function start() {
     setActionError('');
     try {
-      await gameApi.startRoom(code);
+      await gameApi.startRoom(token, code);
       localStorage.removeItem(roundKey(code));
       navigate(`/room/${code}/game`);
     } catch (err) {
@@ -1124,7 +1360,7 @@ function Lobby() {
         <div className="flex flex-wrap justify-between gap-3">
           <div>
             <h1 className="text-3xl font-black">{room?.name}</h1>
-            <p className="font-bold">Sala {code} · {players.length}/{room?.maxPlayers}</p>
+            <p className="font-bold">Sala {code} Â· {players.length}/{room?.maxPlayers}</p>
           </div>
           <Button variant="ghost" onClick={() => navigate(`/room/${code}/setup-players`)}><Plus size={18} /></Button>
         </div>
@@ -1146,6 +1382,7 @@ function Lobby() {
 
 function Game() {
   const { code = '' } = useParams();
+  const token = loadPlayerToken();
   const [round, setRound] = useState<Round | null>(null);
   const [voterIndex, setVoterIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -1158,7 +1395,7 @@ function Game() {
     setError('');
     try {
       const stored = Number(localStorage.getItem(roundKey(code)));
-      const current = stored ? await gameApi.getRound(stored) : await gameApi.createRound(code);
+      const current = stored ? await gameApi.getRound(token, stored) : await gameApi.createRound(token, code);
       localStorage.setItem(roundKey(code), String(current.roundId));
       setRound(current);
       setVoterIndex(Math.min(current.votesReceived, current.players.length - 1));
@@ -1180,12 +1417,12 @@ function Game() {
     if (!round || !voter || !selected) return;
     setError('');
     try {
-      const progress = await gameApi.vote(round.roundId, voter.id, selected);
+      const progress = await gameApi.vote(token, round.roundId, voter.id, selected);
       setSelected(null);
       if (progress.allVotesReceived) {
         navigate(`/room/${code}/result`);
       } else {
-        const updated = await gameApi.getRound(round.roundId);
+        const updated = await gameApi.getRound(token, round.roundId);
         setRound(updated);
         setVoterIndex(progress.votesReceived);
       }
@@ -1231,6 +1468,7 @@ function Game() {
 
 function Result() {
   const { code = '' } = useParams();
+  const token = loadPlayerToken();
   const [result, setResult] = useState<RoundResult | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1243,7 +1481,7 @@ function Result() {
       try {
         const roundId = Number(localStorage.getItem(roundKey(code)));
         if (!roundId) throw new Error('Rodada nao encontrada.');
-        setResult(await gameApi.result(roundId));
+        setResult(await gameApi.result(token, roundId));
       } catch (err) {
         setError(apiError(err));
       } finally {
@@ -1329,15 +1567,19 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/acesso" element={<AuthPage />} />
+      <Route path="/cadastro" element={<RegisterPage />} />
+      <Route path="/painel" element={<RequirePlayerSession><PlayerPanel /></RequirePlayerSession>} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/visitante" element={<VisitorMode />} />
-      <Route path="/create-room" element={<CreateRoom />} />
-      <Route path="/room/:code/setup-players" element={<SetupPlayers />} />
-      <Route path="/room/:code/lobby" element={<Lobby />} />
-      <Route path="/room/:code/game" element={<Game />} />
-      <Route path="/room/:code/result" element={<Result />} />
-      <Route path="/room/:code/final" element={<Final />} />
+      <Route path="/create-room" element={<RequirePlayerSession><CreateRoom /></RequirePlayerSession>} />
+      <Route path="/room/:code/setup-players" element={<RequirePlayerSession><SetupPlayers /></RequirePlayerSession>} />
+      <Route path="/room/:code/lobby" element={<RequirePlayerSession><Lobby /></RequirePlayerSession>} />
+      <Route path="/room/:code/game" element={<RequirePlayerSession><Game /></RequirePlayerSession>} />
+      <Route path="/room/:code/result" element={<RequirePlayerSession><Result /></RequirePlayerSession>} />
+      <Route path="/room/:code/final" element={<RequirePlayerSession><Final /></RequirePlayerSession>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
+

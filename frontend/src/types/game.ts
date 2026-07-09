@@ -73,6 +73,20 @@ export type AdminUser = {
   updatedAt?: string | null;
 };
 
+export type PlayerAccount = {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type PlayerSession = {
+  token: string;
+  user: PlayerAccount;
+};
+
 export type AdminRoom = Room & {
   playersCount: number;
   createdAt?: string | null;

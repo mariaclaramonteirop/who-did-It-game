@@ -17,16 +17,19 @@ final class RoundController
 
     public function show(Request $request, Response $response, array $args): Response
     {
-        return JsonResponse::send($response, $this->service->getRound((int) $args['id']));
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send($response, $this->service->getRound((int) $args['id'], $account));
     }
 
     public function vote(Request $request, Response $response, array $args): Response
     {
+        $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
         return JsonResponse::send($response, $this->service->registerVote((int) $args['id'], (array) $request->getParsedBody()), 201);
     }
 
     public function result(Request $request, Response $response, array $args): Response
     {
-        return JsonResponse::send($response, $this->service->getRoundResult((int) $args['id']));
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send($response, $this->service->getRoundResult((int) $args['id'], $account));
     }
 }

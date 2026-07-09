@@ -17,12 +17,14 @@ final class RoomController
 
     public function create(Request $request, Response $response): Response
     {
-        return JsonResponse::send($response, $this->service->createRoom((array) $request->getParsedBody()), 201);
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send($response, $this->service->createRoom((array) $request->getParsedBody(), $account), 201);
     }
 
     public function show(Request $request, Response $response, array $args): Response
     {
-        return JsonResponse::send($response, $this->service->getRoom($args['code']));
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send($response, $this->service->getRoom($args['code'], $account));
     }
 
     public function addPlayer(Request $request, Response $response, array $args): Response
@@ -32,16 +34,19 @@ final class RoomController
 
     public function start(Request $request, Response $response, array $args): Response
     {
-        return JsonResponse::send($response, $this->service->startRoom($args['code']));
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send($response, $this->service->startRoom($args['code'], $account));
     }
 
     public function createRound(Request $request, Response $response, array $args): Response
     {
-        return JsonResponse::send($response, $this->service->createRound($args['code']), 201);
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send($response, $this->service->createRound($args['code'], $account), 201);
     }
 
     public function ranking(Request $request, Response $response, array $args): Response
     {
-        return JsonResponse::send($response, $this->service->ranking($args['code']));
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send($response, $this->service->ranking($args['code'], $account));
     }
 }

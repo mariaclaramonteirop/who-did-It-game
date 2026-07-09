@@ -12,10 +12,17 @@ final class PlayerDAO
     {
     }
 
-    public function create(int $roomId, string $name, bool $isHost): array
+    public function create(int $roomId, string $name, bool $isHost, ?int $accountId = null): array
     {
-        $stmt = $this->db->prepare('INSERT INTO players (room_id, name, is_host) VALUES (:room_id, :name, :is_host)');
-        $stmt->execute(['room_id' => $roomId, 'name' => $name, 'is_host' => $isHost ? 1 : 0]);
+        $stmt = $this->db->prepare(
+            'INSERT INTO players (room_id, account_id, name, is_host) VALUES (:room_id, :account_id, :name, :is_host)'
+        );
+        $stmt->execute([
+            'room_id' => $roomId,
+            'account_id' => $accountId,
+            'name' => $name,
+            'is_host' => $isHost ? 1 : 0,
+        ]);
         return $this->find((int) $this->db->lastInsertId());
     }
 
@@ -31,6 +38,25 @@ final class PlayerDAO
         $stmt = $this->db->prepare('SELECT * FROM players WHERE id = :id AND room_id = :room_id');
         $stmt->execute(['id' => $playerId, 'room_id' => $roomId]);
         return $stmt->fetch() ?: null;
+    }
+
+    public function findByAccountInRoom(int $roomId, int $accountId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM players WHERE room_id = :room_id AND account_id = :account_id');
+        $stmt->execute(['room_id' => $roomId, 'account_id' => $accountId]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public function upsertAccountPlayer(int $roomId, int $accountId, string $name): array
+    {
+        $existing = $this->findByAccountInRoom($roomId, $accountId);
+        if ($existing !== null) {
+            $stmt = $this->db->prepare('UPDATE players SET name = :name WHERE id = :id');
+            $stmt->execute(['name' => $name, 'id' => $existing['id']]);
+            return $this->find((int) $existing['id']);
+        }
+
+        return $this->create($roomId, $name, $this->countByRoom($roomId) === 0, $accountId);
     }
 
     public function listByRoom(int $roomId): array

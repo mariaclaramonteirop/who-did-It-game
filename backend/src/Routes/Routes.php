@@ -6,6 +6,7 @@ namespace App\Routes;
 
 use App\Config\Database;
 use App\Controllers\AdminController;
+use App\Controllers\AuthController;
 use App\Controllers\CategoryController;
 use App\Controllers\QuestionController;
 use App\Controllers\RoomController;
@@ -46,6 +47,11 @@ final class Routes
         $app->get('/rounds/{id}', fn ($request, $response, $args) => (new RoundController($service()))->show($request, $response, $args));
         $app->post('/rounds/{id}/votes', fn ($request, $response, $args) => (new RoundController($service()))->vote($request, $response, $args));
         $app->get('/rounds/{id}/result', fn ($request, $response, $args) => (new RoundController($service()))->result($request, $response, $args));
+
+        $app->post('/auth/login', fn ($request, $response) => (new AuthController($service()))->login($request, $response));
+        $app->post('/auth/register', fn ($request, $response) => (new AuthController($service()))->register($request, $response));
+        $app->get('/auth/me', fn ($request, $response) => (new AuthController($service()))->me($request, $response));
+        $app->patch('/auth/me', fn ($request, $response) => (new AuthController($service()))->updateMe($request, $response));
 
         $app->get('/questions', fn ($request, $response) => (new QuestionController($service()))->list($request, $response));
         $app->post('/questions', fn ($request, $response) => (new QuestionController($service()))->create($request, $response));

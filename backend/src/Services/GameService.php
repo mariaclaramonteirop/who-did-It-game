@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DAO\AdminUserDAO;
+use App\DAO\PlayerAccountDAO;
 use App\DAO\PlayerDAO;
 use App\DAO\CategoryDAO;
 use App\DAO\QuestionDAO;
@@ -22,6 +23,7 @@ final class GameService
     private const ADMIN_PERMISSIONS = ['questions', 'categories', 'rooms', 'players', 'admins'];
 
     private AdminUserDAO $adminUsers;
+    private PlayerAccountDAO $playerAccounts;
     private RoomDAO $rooms;
     private PlayerDAO $players;
     private CategoryDAO $categories;
@@ -36,6 +38,8 @@ final class GameService
             $this->env('ADMIN_USERNAME', 'admin'),
             password_hash($this->env('ADMIN_PASSWORD', 'admin123'), PASSWORD_DEFAULT)
         );
+        $this->playerAccounts = new PlayerAccountDAO($db);
+        $this->playerAccounts->ensureSchema();
         $this->rooms = new RoomDAO($db);
         $this->players = new PlayerDAO($db);
         $this->categories = new CategoryDAO($db);
@@ -45,7 +49,7 @@ final class GameService
         $this->votes = new VoteDAO($db);
     }
 
-    public function createRoom(array $payload): array
+    public function createRoom(array $payload, ?array $account = null): array
     {
         $name = trim((string) ($payload['name'] ?? ''));
         $maxPlayers = (int) ($payload['maxPlayers'] ?? 6);
@@ -70,12 +74,120 @@ final class GameService
             'categoryFilter' => $this->normalizeCategoryFilter($payload['categoryFilter'] ?? 'all'),
         ];
 
-        return $this->formatRoom($this->rooms->create($data, $this->generateCode()));
+        $room = $this->rooms->create($data, $this->generateCode());
+        if ($account !== null) {
+            $this->ensureAccountInRoom((int) $room['id'], $account);
+        }
+
+        return $this->formatRoom($room);
     }
 
-    public function getRoom(string $code): array
+    public function playerRegister(array $payload): array
+    {
+        $username = $this->normalizeUsername($payload['username'] ?? '');
+        $email = $this->normalizeEmail($payload['email'] ?? '');
+        $name = trim((string) ($payload['name'] ?? ''));
+        $password = (string) ($payload['password'] ?? '');
+
+        if ($username === '' || $email === '' || $name === '' || strlen($password) < 6) {
+            throw new HttpException(422, 'Informe nome, usuario, email e senha com pelo menos 6 caracteres.');
+        }
+        if ($this->playerAccounts->findByIdentifier($username) !== null || $this->playerAccounts->findByIdentifier($email) !== null) {
+            throw new HttpException(409, 'Ja existe uma conta com esse usuario ou email.');
+        }
+
+        $account = $this->playerAccounts->create([
+            'username' => $username,
+            'email' => $email,
+            'name' => $name,
+            'passwordHash' => password_hash($password, PASSWORD_DEFAULT),
+            'isActive' => true,
+        ]);
+
+        return [
+            'token' => $this->createPlayerToken((int) $account['id']),
+            'user' => $this->formatPlayerAccount($account),
+        ];
+    }
+
+    public function playerLogin(array $payload): array
+    {
+        $identifier = $this->normalizeIdentifier($payload['identifier'] ?? '');
+        $password = (string) ($payload['password'] ?? '');
+
+        if ($identifier === '' || $password === '') {
+            throw new HttpException(422, 'Informe usuario ou email e senha.');
+        }
+
+        $account = $this->playerAccounts->findByIdentifier($identifier);
+        if ($account === null || !(bool) $account['is_active'] || !password_verify($password, $account['password_hash'])) {
+            throw new HttpException(401, 'Credenciais invalidas.');
+        }
+
+        return [
+            'token' => $this->createPlayerToken((int) $account['id']),
+            'user' => $this->formatPlayerAccount($account),
+        ];
+    }
+
+    public function playerUpdateProfile(array $payload, array $account): array
+    {
+        $current = $this->playerAccounts->find((int) $account['id']);
+        if ($current === null) {
+            throw new HttpException(404, 'Conta de jogador nao encontrada.');
+        }
+
+        $username = array_key_exists('username', $payload) ? $this->normalizeUsername($payload['username']) : $current['username'];
+        $email = array_key_exists('email', $payload) ? $this->normalizeEmail($payload['email']) : $current['email'];
+        $name = array_key_exists('name', $payload) ? trim((string) $payload['name']) : $current['name'];
+        $password = (string) ($payload['password'] ?? '');
+
+        if ($username === '' || $email === '' || $name === '') {
+            throw new HttpException(422, 'Informe usuario, email e nome validos.');
+        }
+        if ($this->playerAccounts->findByIdentifierExceptId($username, (int) $current['id']) !== null) {
+            throw new HttpException(409, 'Ja existe um jogador com esse usuario.');
+        }
+        if ($this->playerAccounts->findByIdentifierExceptId($email, (int) $current['id']) !== null) {
+            throw new HttpException(409, 'Ja existe um jogador com esse email.');
+        }
+
+        $data = [
+            'username' => $username,
+            'email' => $email,
+            'name' => $name,
+        ];
+        if ($password !== '') {
+            if (strlen($password) < 6) {
+                throw new HttpException(422, 'A senha precisa ter pelo menos 6 caracteres.');
+            }
+            $data['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+        }
+
+        return $this->formatPlayerAccount($this->playerAccounts->update((int) $current['id'], $data));
+    }
+
+    public function requirePlayerSession(string $authorization): array
+    {
+        if (!preg_match('/^Bearer\s+(.+)$/i', trim($authorization), $matches)) {
+            throw new HttpException(401, 'Login de jogador obrigatorio.');
+        }
+
+        $payload = $this->decodePlayerToken($matches[1]);
+        $account = $this->playerAccounts->find((int) ($payload['id'] ?? 0));
+        if ($account === null || !(bool) $account['is_active']) {
+            throw new HttpException(401, 'Sessao de jogador invalida.');
+        }
+
+        return $account;
+    }
+
+    public function getRoom(string $code, ?array $account = null): array
     {
         $room = $this->requireRoom($code);
+        if ($account !== null) {
+            $this->ensureAccountInRoom((int) $room['id'], $account);
+        }
         return [
             ...$this->formatRoom($room),
             'players' => $this->formatPlayers($this->players->listByRoom((int) $room['id'])),
@@ -113,9 +225,12 @@ final class GameService
         return $this->formatPlayer($player);
     }
 
-    public function startRoom(string $code): array
+    public function startRoom(string $code, ?array $account = null): array
     {
         $room = $this->requireRoom($code);
+        if ($account !== null) {
+            $this->ensureAccountInRoom((int) $room['id'], $account);
+        }
         if ($room['status'] === Room::FINISHED) {
             throw new HttpException(409, 'Esta partida ja foi finalizada.');
         }
@@ -127,9 +242,12 @@ final class GameService
         return $this->getRoom($code);
     }
 
-    public function createRound(string $code): array
+    public function createRound(string $code, ?array $account = null): array
     {
         $room = $this->requireRoom($code);
+        if ($account !== null) {
+            $this->ensureAccountInRoom((int) $room['id'], $account);
+        }
         if ($room['status'] !== Room::IN_PROGRESS) {
             throw new HttpException(409, 'A partida precisa estar em andamento para criar rodada.');
         }
@@ -148,8 +266,12 @@ final class GameService
         return $this->formatRound($this->rounds->find((int) $round['id']));
     }
 
-    public function getRound(int $roundId): array
+    public function getRound(int $roundId, ?array $account = null): array
     {
+        if ($account !== null) {
+            $room = $this->roomById((int) $this->requireRound($roundId)['room_id']);
+            $this->ensureAccountInRoom((int) $room['id'], $account);
+        }
         return $this->formatRound($this->requireRound($roundId));
     }
 
@@ -189,9 +311,12 @@ final class GameService
         ];
     }
 
-    public function getRoundResult(int $roundId): array
+    public function getRoundResult(int $roundId, ?array $account = null): array
     {
         $round = $this->requireRound($roundId);
+        if ($account !== null) {
+            $this->ensureAccountInRoom((int) $round['room_id'], $account);
+        }
         $totalPlayers = $this->players->countByRoom((int) $round['room_id']);
         $votesReceived = $this->votes->countByRound($roundId);
         if ($votesReceived < $totalPlayers) {
@@ -227,9 +352,12 @@ final class GameService
         ];
     }
 
-    public function ranking(string $code): array
+    public function ranking(string $code, ?array $account = null): array
     {
         $room = $this->requireRoom($code);
+        if ($account !== null) {
+            $this->ensureAccountInRoom((int) $room['id'], $account);
+        }
         return $this->formatPlayers($this->players->listByRoom((int) $room['id']));
     }
 
@@ -671,6 +799,22 @@ final class GameService
         return $stmt->fetch();
     }
 
+    private function ensureAccountInRoom(int $roomId, array $account): array
+    {
+        $player = $this->players->upsertAccountPlayer(
+            $roomId,
+            (int) $account['id'],
+            trim((string) ($account['name'] ?? $account['username'] ?? 'Jogador'))
+        );
+
+        $room = $this->rooms->find($roomId);
+        if ($room !== null && $room['status'] === Room::WAITING_PLAYERS && $this->players->countByRoom($roomId) >= 3) {
+            $this->rooms->updateStatus($roomId, Room::READY);
+        }
+
+        return $player;
+    }
+
     private function formatRoom(array $room): array
     {
         return [
@@ -735,6 +879,18 @@ final class GameService
         ];
     }
 
+    private function formatPlayerAccount(array $account): array
+    {
+        return [
+            'id' => (int) $account['id'],
+            'username' => $account['username'],
+            'email' => $account['email'],
+            'name' => $account['name'],
+            'createdAt' => $account['created_at'] ?? null,
+            'updatedAt' => $account['updated_at'] ?? null,
+        ];
+    }
+
     private function formatAdminPlayer(array $player): array
     {
         return [
@@ -758,6 +914,17 @@ final class GameService
         return $body . '.' . $signature;
     }
 
+    private function createPlayerToken(int $playerId): string
+    {
+        $payload = [
+            'id' => $playerId,
+            'exp' => time() + 86400,
+        ];
+        $body = $this->base64UrlEncode(json_encode($payload, JSON_UNESCAPED_UNICODE));
+        $signature = hash_hmac('sha256', $body, $this->playerSecret());
+        return $body . '.' . $signature;
+    }
+
     private function decodeAdminToken(string $token): array
     {
         [$body, $signature] = array_pad(explode('.', $token, 2), 2, '');
@@ -773,9 +940,29 @@ final class GameService
         return $payload;
     }
 
+    private function decodePlayerToken(string $token): array
+    {
+        [$body, $signature] = array_pad(explode('.', $token, 2), 2, '');
+        if ($body === '' || !hash_equals(hash_hmac('sha256', $body, $this->playerSecret()), $signature)) {
+            throw new HttpException(401, 'Sessao de jogador invalida.');
+        }
+
+        $payload = json_decode(base64_decode(strtr($body, '-_', '+/')) ?: '', true);
+        if (!is_array($payload) || (int) ($payload['exp'] ?? 0) < time()) {
+            throw new HttpException(401, 'Sessao de jogador expirada.');
+        }
+
+        return $payload;
+    }
+
     private function adminSecret(): string
     {
         return $this->env('ADMIN_SECRET', 'quem-fez-isso-admin-secret');
+    }
+
+    private function playerSecret(): string
+    {
+        return $this->env('PLAYER_SECRET', $this->adminSecret());
     }
 
     private function env(string $key, string $fallback): string
@@ -798,6 +985,16 @@ final class GameService
     private function normalizeUsername(mixed $username): string
     {
         return strtolower(trim((string) $username));
+    }
+
+    private function normalizeEmail(mixed $email): string
+    {
+        return strtolower(trim((string) $email));
+    }
+
+    private function normalizeIdentifier(mixed $identifier): string
+    {
+        return strtolower(trim((string) $identifier));
     }
 
     private function normalizeRole(mixed $role): string
