@@ -23,16 +23,19 @@ final class CategoryController
 
     public function create(Request $request, Response $response): Response
     {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'categories');
         return JsonResponse::send($response, $this->service->createCategory((array) $request->getParsedBody()), 201);
     }
 
     public function update(Request $request, Response $response, array $args): Response
     {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'categories');
         return JsonResponse::send($response, $this->service->updateCategory((int) $args['id'], (array) $request->getParsedBody()));
     }
 
     public function deactivate(Request $request, Response $response, array $args): Response
     {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'categories');
         return JsonResponse::send($response, $this->service->deactivateCategory((int) $args['id']));
     }
 }

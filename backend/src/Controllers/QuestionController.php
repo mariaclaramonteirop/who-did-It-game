@@ -23,21 +23,25 @@ final class QuestionController
 
     public function create(Request $request, Response $response): Response
     {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'questions');
         return JsonResponse::send($response, $this->service->createQuestion((array) $request->getParsedBody()), 201);
     }
 
     public function update(Request $request, Response $response, array $args): Response
     {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'questions');
         return JsonResponse::send($response, $this->service->updateQuestion((int) $args['id'], (array) $request->getParsedBody()));
     }
 
     public function deactivate(Request $request, Response $response, array $args): Response
     {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'questions');
         return JsonResponse::send($response, $this->service->setQuestionActive((int) $args['id'], false));
     }
 
     public function import(Request $request, Response $response): Response
     {
+        $this->service->requireAdmin($request->getHeaderLine('Authorization'), 'questions');
         $questions = $this->extractQuestions($request);
         return JsonResponse::send($response, $this->service->importQuestions($questions), 201);
     }

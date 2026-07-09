@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\DAO\AdminUserDAO;
 use App\DAO\PlayerDAO;
 use App\DAO\CategoryDAO;
 use App\DAO\QuestionDAO;
@@ -18,6 +19,9 @@ use Throwable;
 
 final class GameService
 {
+    private const ADMIN_PERMISSIONS = ['questions', 'categories', 'rooms', 'players', 'admins'];
+
+    private AdminUserDAO $adminUsers;
     private RoomDAO $rooms;
     private PlayerDAO $players;
     private CategoryDAO $categories;
@@ -27,6 +31,11 @@ final class GameService
 
     public function __construct(private readonly PDO $db)
     {
+        $this->adminUsers = new AdminUserDAO($db);
+        $this->adminUsers->ensureSchema(
+            $this->env('ADMIN_USERNAME', 'admin'),
+            password_hash($this->env('ADMIN_PASSWORD', 'admin123'), PASSWORD_DEFAULT)
+        );
         $this->rooms = new RoomDAO($db);
         $this->players = new PlayerDAO($db);
         $this->categories = new CategoryDAO($db);
@@ -222,6 +231,233 @@ final class GameService
     {
         $room = $this->requireRoom($code);
         return $this->formatPlayers($this->players->listByRoom((int) $room['id']));
+    }
+
+    public function adminLogin(array $payload): array
+    {
+        $username = trim((string) ($payload['username'] ?? ''));
+        $password = (string) ($payload['password'] ?? '');
+        if ($username === '' || $password === '') {
+            throw new HttpException(422, 'Informe usuario e senha.');
+        }
+
+        $admin = $this->adminUsers->findByUsername($username);
+        if ($admin === null || !(bool) $admin['is_active'] || !password_verify($password, $admin['password_hash'])) {
+            throw new HttpException(401, 'Credenciais invalidas.');
+        }
+
+        $formatted = $this->formatAdminUser($admin);
+        return [
+            'token' => $this->createAdminToken((int) $admin['id']),
+            'user' => $formatted,
+        ];
+    }
+
+    public function requireAdmin(string $authorization, string $permission): array
+    {
+        if (!preg_match('/^Bearer\s+(.+)$/i', trim($authorization), $matches)) {
+            throw new HttpException(401, 'Login de admin obrigatorio.');
+        }
+
+        $payload = $this->decodeAdminToken($matches[1]);
+        $admin = $this->adminUsers->find((int) ($payload['id'] ?? 0));
+        if ($admin === null || !(bool) $admin['is_active']) {
+            throw new HttpException(401, 'Sessao de admin invalida.');
+        }
+
+        $permissions = $this->adminPermissions($admin);
+        if ($permission !== 'dashboard' && !in_array('all', $permissions, true) && !in_array($permission, $permissions, true)) {
+            throw new HttpException(403, 'Sem permissao para acessar este recurso.');
+        }
+
+        return $admin;
+    }
+
+    public function adminDashboard(): array
+    {
+        $rooms = $this->rooms->listAll();
+        $players = $this->players->listAll();
+        $questions = $this->questions->list(true);
+        $admins = $this->adminUsers->list();
+        $winners = $this->recentWinners();
+
+        return [
+            'totals' => [
+                'rooms' => count($rooms),
+                'activeRooms' => count(array_filter($rooms, fn (array $room) => $room['status'] !== Room::FINISHED)),
+                'players' => count($players),
+                'questions' => count($questions),
+                'activeQuestions' => count(array_filter($questions, fn (array $question) => (bool) $question['is_active'])),
+                'categories' => count($this->categories->list(true)),
+                'admins' => count($admins),
+                'winners' => count($winners),
+            ],
+            'roomsByStatus' => $this->countByKey($rooms, 'status'),
+            'questionsByCategory' => $this->countByKey($questions, 'category'),
+            'questionsByLevel' => $this->countByKey($questions, 'level'),
+            'adminsByRole' => $this->countByKey($admins, 'role'),
+            'adminsByStatus' => array_map(
+                fn (array $item) => [
+                    'label' => $item['label'] === '1' ? 'Ativo' : 'Inativo',
+                    'value' => $item['value'],
+                ],
+                $this->countByKey($admins, 'is_active')
+            ),
+            'playersByRoom' => array_slice(array_map(fn (array $room) => [
+                'label' => $room['code'] . ' - ' . $room['name'],
+                'value' => (int) $room['players_count'],
+            ], $rooms), 0, 8),
+            'roomsByDate' => $this->countCreatedByDate('rooms'),
+            'playersByDate' => $this->countCreatedByDate('players'),
+            'questionsByDate' => $this->countCreatedByDate('questions'),
+            'winnersByDate' => $this->countCreatedByDate('round_winners'),
+            'adminsByDate' => $this->countCreatedByDate('admin_users'),
+            'recentRooms' => $this->recentRows('rooms', 8),
+            'recentPlayers' => $this->recentRows('players', 8),
+            'recentQuestions' => $this->recentRows('questions', 8),
+            'recentAdmins' => $this->recentRows('admin_users', 8),
+            'recentWinners' => $winners,
+        ];
+    }
+
+    public function adminListRooms(): array
+    {
+        return array_map(fn (array $room) => [
+            ...$this->formatRoom($room),
+            'playersCount' => (int) ($room['players_count'] ?? 0),
+            'createdAt' => $room['created_at'] ?? null,
+            'updatedAt' => $room['updated_at'] ?? null,
+        ], $this->rooms->listAll());
+    }
+
+    public function adminUpdateRoom(int $id, array $payload): array
+    {
+        $current = $this->rooms->find($id);
+        if ($current === null) {
+            throw new HttpException(404, 'Sala nao encontrada.');
+        }
+
+        $name = trim((string) ($payload['name'] ?? $current['name']));
+        $status = (string) ($payload['status'] ?? $current['status']);
+        $maxPlayers = (int) ($payload['maxPlayers'] ?? $current['max_players']);
+        $maxScore = (int) ($payload['maxScore'] ?? $current['max_score']);
+        if ($name === '') {
+            throw new HttpException(422, 'Informe o nome da sala.');
+        }
+        if (!in_array($status, [Room::WAITING_PLAYERS, Room::READY, Room::IN_PROGRESS, Room::FINISHED], true)) {
+            throw new HttpException(422, 'Status de sala invalido.');
+        }
+
+        return $this->formatRoom($this->rooms->update($id, [
+            'name' => $name,
+            'maxPlayers' => max(3, min(20, $maxPlayers)),
+            'maxScore' => max(1, min(30, $maxScore)),
+            'status' => $status,
+            'categoryFilter' => $this->normalizeCategoryFilter($payload['categoryFilter'] ?? $current['category_filter']),
+        ]));
+    }
+
+    public function adminDeleteRoom(int $id): array
+    {
+        if ($this->rooms->find($id) === null) {
+            throw new HttpException(404, 'Sala nao encontrada.');
+        }
+        $this->rooms->delete($id);
+        return ['deleted' => true];
+    }
+
+    public function adminListPlayers(): array
+    {
+        return array_map(fn (array $player) => $this->formatAdminPlayer($player), $this->players->listAll());
+    }
+
+    public function adminUpdatePlayer(int $id, array $payload): array
+    {
+        $current = $this->players->find($id);
+        if ($current === null) {
+            throw new HttpException(404, 'Usuario nao encontrado.');
+        }
+
+        $name = trim((string) ($payload['name'] ?? $current['name']));
+        if ($name === '') {
+            throw new HttpException(422, 'Informe o nome do usuario.');
+        }
+
+        return $this->formatPlayer($this->players->update($id, [
+            'name' => $name,
+            'score' => max(0, (int) ($payload['score'] ?? $current['score'])),
+            'isHost' => array_key_exists('isHost', $payload) ? (bool) $payload['isHost'] : (bool) $current['is_host'],
+        ]));
+    }
+
+    public function adminDeletePlayer(int $id): array
+    {
+        if ($this->players->find($id) === null) {
+            throw new HttpException(404, 'Usuario nao encontrado.');
+        }
+        $this->players->delete($id);
+        return ['deleted' => true];
+    }
+
+    public function adminListUsers(): array
+    {
+        return array_map(fn (array $admin) => $this->formatAdminUser($admin), $this->adminUsers->list());
+    }
+
+    public function adminCreateUser(array $payload): array
+    {
+        $username = $this->normalizeUsername($payload['username'] ?? '');
+        $name = trim((string) ($payload['name'] ?? $username));
+        $password = (string) ($payload['password'] ?? '');
+        if ($username === '' || $name === '' || strlen($password) < 6) {
+            throw new HttpException(422, 'Informe nome, usuario e senha com pelo menos 6 caracteres.');
+        }
+        if ($this->adminUsers->findByUsername($username) !== null) {
+            throw new HttpException(409, 'Ja existe um admin com esse usuario.');
+        }
+
+        return $this->formatAdminUser($this->adminUsers->create([
+            'username' => $username,
+            'name' => $name,
+            'passwordHash' => password_hash($password, PASSWORD_DEFAULT),
+            'role' => $this->normalizeRole($payload['role'] ?? 'manager'),
+            'permissions' => $this->normalizePermissions($payload['permissions'] ?? ['questions', 'categories']),
+            'isActive' => true,
+        ]));
+    }
+
+    public function adminUpdateUser(int $id, array $payload): array
+    {
+        $current = $this->adminUsers->find($id);
+        if ($current === null) {
+            throw new HttpException(404, 'Admin nao encontrado.');
+        }
+
+        $data = [];
+        if (array_key_exists('name', $payload)) {
+            $name = trim((string) $payload['name']);
+            if ($name === '') {
+                throw new HttpException(422, 'Informe o nome do admin.');
+            }
+            $data['name'] = $name;
+        }
+        if (array_key_exists('role', $payload)) {
+            $data['role'] = $this->normalizeRole($payload['role']);
+        }
+        if (array_key_exists('permissions', $payload)) {
+            $data['permissions'] = json_encode($this->normalizePermissions($payload['permissions']), JSON_UNESCAPED_UNICODE);
+        }
+        if (array_key_exists('isActive', $payload)) {
+            $data['is_active'] = (bool) $payload['isActive'] ? 1 : 0;
+        }
+        if (!empty($payload['password'])) {
+            if (strlen((string) $payload['password']) < 6) {
+                throw new HttpException(422, 'A senha precisa ter pelo menos 6 caracteres.');
+            }
+            $data['password_hash'] = password_hash((string) $payload['password'], PASSWORD_DEFAULT);
+        }
+
+        return $this->formatAdminUser($this->adminUsers->update($id, $data));
     }
 
     public function listQuestions(bool $includeInactive = false): array
@@ -468,6 +704,8 @@ final class GameService
             'category' => $question['category'],
             'level' => $question['level'],
             'isActive' => (bool) $question['is_active'],
+            'createdAt' => $question['created_at'] ?? null,
+            'updatedAt' => $question['updated_at'] ?? null,
         ];
     }
 
@@ -478,7 +716,198 @@ final class GameService
             'slug' => $category['slug'],
             'name' => $category['name'],
             'isActive' => (bool) $category['is_active'],
+            'createdAt' => $category['created_at'] ?? null,
+            'updatedAt' => $category['updated_at'] ?? null,
         ];
+    }
+
+    private function formatAdminUser(array $admin): array
+    {
+        return [
+            'id' => (int) $admin['id'],
+            'username' => $admin['username'],
+            'name' => $admin['name'],
+            'role' => $admin['role'],
+            'permissions' => $this->adminPermissions($admin),
+            'isActive' => (bool) $admin['is_active'],
+            'createdAt' => $admin['created_at'] ?? null,
+            'updatedAt' => $admin['updated_at'] ?? null,
+        ];
+    }
+
+    private function formatAdminPlayer(array $player): array
+    {
+        return [
+            ...$this->formatPlayer($player),
+            'roomId' => (int) $player['room_id'],
+            'roomCode' => $player['room_code'],
+            'roomName' => $player['room_name'],
+            'createdAt' => $player['created_at'] ?? null,
+            'updatedAt' => $player['updated_at'] ?? null,
+        ];
+    }
+
+    private function createAdminToken(int $adminId): string
+    {
+        $payload = [
+            'id' => $adminId,
+            'exp' => time() + 86400,
+        ];
+        $body = $this->base64UrlEncode(json_encode($payload, JSON_UNESCAPED_UNICODE));
+        $signature = hash_hmac('sha256', $body, $this->adminSecret());
+        return $body . '.' . $signature;
+    }
+
+    private function decodeAdminToken(string $token): array
+    {
+        [$body, $signature] = array_pad(explode('.', $token, 2), 2, '');
+        if ($body === '' || !hash_equals(hash_hmac('sha256', $body, $this->adminSecret()), $signature)) {
+            throw new HttpException(401, 'Sessao de admin invalida.');
+        }
+
+        $payload = json_decode(base64_decode(strtr($body, '-_', '+/')) ?: '', true);
+        if (!is_array($payload) || (int) ($payload['exp'] ?? 0) < time()) {
+            throw new HttpException(401, 'Sessao de admin expirada.');
+        }
+
+        return $payload;
+    }
+
+    private function adminSecret(): string
+    {
+        return $this->env('ADMIN_SECRET', 'quem-fez-isso-admin-secret');
+    }
+
+    private function env(string $key, string $fallback): string
+    {
+        $value = $_ENV[$key] ?? getenv($key);
+        return is_string($value) && $value !== '' ? $value : $fallback;
+    }
+
+    private function base64UrlEncode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    private function adminPermissions(array $admin): array
+    {
+        $decoded = json_decode((string) ($admin['permissions'] ?? '[]'), true);
+        return is_array($decoded) ? array_values(array_filter(array_map('strval', $decoded))) : [];
+    }
+
+    private function normalizeUsername(mixed $username): string
+    {
+        return strtolower(trim((string) $username));
+    }
+
+    private function normalizeRole(mixed $role): string
+    {
+        $role = (string) $role;
+        return in_array($role, ['owner', 'manager', 'viewer'], true) ? $role : 'manager';
+    }
+
+    private function normalizePermissions(mixed $permissions): array
+    {
+        $items = is_array($permissions) ? $permissions : explode(',', (string) $permissions);
+        $normalized = array_values(array_unique(array_filter(array_map('strval', $items))));
+        if (in_array('all', $normalized, true)) {
+            return ['all'];
+        }
+
+        return array_values(array_intersect($normalized, self::ADMIN_PERMISSIONS));
+    }
+
+    private function countByKey(array $rows, string $key): array
+    {
+        $stats = [];
+        foreach ($rows as $row) {
+            $label = (string) ($row[$key] ?? 'sem valor');
+            $stats[$label] = ($stats[$label] ?? 0) + 1;
+        }
+
+        return array_map(fn (string $label, int $value) => compact('label', 'value'), array_keys($stats), $stats);
+    }
+
+    private function countCreatedByDate(string $table): array
+    {
+        if (!in_array($table, ['rooms', 'players', 'questions', 'round_winners', 'admin_users'], true)) {
+            throw new HttpException(500, 'Serie de dashboard invalida.');
+        }
+
+        $stmt = $this->db->query(
+            "SELECT DATE(created_at) AS label, COUNT(*) AS value
+             FROM {$table}
+             GROUP BY DATE(created_at)
+             ORDER BY label ASC
+             LIMIT 30"
+        );
+
+        return array_map(fn (array $row) => [
+            'label' => (string) $row['label'],
+            'value' => (int) $row['value'],
+        ], $stmt->fetchAll());
+    }
+
+    private function recentRows(string $table, int $limit): array
+    {
+        if (!in_array($table, ['rooms', 'players', 'questions', 'admin_users'], true)) {
+            throw new HttpException(500, 'Serie recente invalida.');
+        }
+
+        $stmt = $this->db->query(
+            "SELECT * FROM {$table}
+             ORDER BY created_at DESC
+             LIMIT " . max(1, min(20, $limit))
+        );
+
+        return array_map(function (array $row) use ($table) {
+            return match ($table) {
+                'rooms' => [
+                    'label' => $row['code'] . ' - ' . $row['name'],
+                    'createdAt' => $row['created_at'] ?? null,
+                    'updatedAt' => $row['updated_at'] ?? null,
+                    'meta' => $row['status'] . ' | ' . $row['max_players'] . ' max',
+                ],
+                'players' => [
+                    'label' => $row['name'],
+                    'createdAt' => $row['created_at'] ?? null,
+                    'updatedAt' => $row['updated_at'] ?? null,
+                    'meta' => 'Sala #' . $row['room_id'] . ' | score ' . $row['score'],
+                ],
+                'questions' => [
+                    'label' => $row['text'],
+                    'createdAt' => $row['created_at'] ?? null,
+                    'updatedAt' => $row['updated_at'] ?? null,
+                    'meta' => $row['category'] . ' | ' . $row['level'],
+                ],
+                'admin_users' => [
+                    'label' => $row['username'],
+                    'createdAt' => $row['created_at'] ?? null,
+                    'updatedAt' => $row['updated_at'] ?? null,
+                    'meta' => $row['role'] . ' | ' . ((bool) $row['is_active'] ? 'ativo' : 'inativo'),
+                ],
+            };
+        }, $stmt->fetchAll());
+    }
+
+    private function recentWinners(): array
+    {
+        $stmt = $this->db->query(
+            'SELECT p.id AS player_id, p.name, p.score, r.code AS room_code, r.name AS room_name
+             FROM players p
+             JOIN rooms r ON r.id = p.room_id
+             WHERE p.score > 0
+             ORDER BY p.score DESC, p.updated_at DESC
+             LIMIT 10'
+        );
+
+        return array_map(fn (array $row) => [
+            'playerId' => (int) $row['player_id'],
+            'name' => $row['name'],
+            'score' => (int) $row['score'],
+            'roomCode' => $row['room_code'],
+            'roomName' => $row['room_name'],
+        ], $stmt->fetchAll());
     }
 
     public function parseQuestionsCsv(string $csv): array

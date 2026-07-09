@@ -13,6 +13,9 @@ services:
       DB_NAME: jogo_dos_culpados
       DB_USER: root
       DB_PASSWORD: root
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      ADMIN_SECRET: quem-fez-isso-local
 
   frontend:
     build: ./frontend

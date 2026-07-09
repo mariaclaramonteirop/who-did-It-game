@@ -1,6 +1,6 @@
 # Quem fez isso? Who Did It?
 
-Sistema web de party game com perguntas aleatorias, votacao entre amigos, contagem de votos, pontuacao por rodada, ranking final e administracao de perguntas.
+Sistema web de party game com perguntas aleatorias, votacao entre amigos, contagem de votos, pontuacao por rodada, ranking final e administracao.
 
 ## Stack
 
@@ -20,7 +20,9 @@ Sistema web de party game com perguntas aleatorias, votacao entre amigos, contag
 - Dar ponto para o mais votado, incluindo empates
 - Finalizar a partida quando alguem atingir a pontuacao maxima
 - Exibir ranking atualizado e tela final
-- Area admin para cadastrar, editar, ativar e desativar perguntas
+- Area admin com login, dashboard, abas dinamicas e permissoes
+- Cadastro de admins com usuario, senha, perfil e permissoes
+- Gerenciamento de salas, usuarios/jogadores, perguntas e categorias
 - Importacao em lote de perguntas via CSV ou JSON no admin
 - Cadastro e gerenciamento de categorias no admin
 - Selecao de uma ou mais categorias ao criar sala
@@ -47,8 +49,13 @@ O admin nao aparece na navegacao do jogo. Ele deve ser acessado diretamente por 
 http://localhost:5173/admin
 ```
 
-No MVP, o admin gerencia perguntas, categorias e mostra graficos simples por status, categoria e nivel.
-Tambem aceita importacao em lote por arquivo CSV/JSON ou por CSV colado no formulario.
+O admin abre com login e nao aparece na navegacao do jogo. Credencial inicial local:
+
+- Usuario: `admin`
+- Senha: `admin123`
+
+No Docker, esses valores podem ser alterados por `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_SECRET`.
+O admin tem menu em abas: Dashboard, Perguntas, Categorias, Importar, Salas, Usuarios, Admins e Graficos. A aba Perguntas tem filtros por texto, categoria, nivel e status. Administradores podem ter permissoes para `questions`, `categories`, `rooms`, `players`, `admins` ou `all`.
 
 Credenciais do banco:
 
@@ -68,6 +75,17 @@ GET /rounds/{id}
 POST /rounds/{id}/votes
 GET /rounds/{id}/result
 GET /rooms/{code}/ranking
+POST /admin/login
+GET /admin/dashboard
+GET /admin/rooms
+PATCH /admin/rooms/{id}
+DELETE /admin/rooms/{id}
+GET /admin/players
+PATCH /admin/players/{id}
+DELETE /admin/players/{id}
+GET /admin/users
+POST /admin/users
+PATCH /admin/users/{id}
 GET /questions
 POST /questions
 PATCH /questions/{id}

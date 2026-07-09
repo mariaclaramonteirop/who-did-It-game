@@ -37,3 +37,6 @@ INSERT INTO questions (text, category, level) VALUES
 ('Quem mais provavelmente ficaria famoso por um motivo aleatorio?', 'caos', 'caos'),
 ('Quem mais provavelmente faria amizade com o garcom?', 'festa', 'leve'),
 ('Quem mais provavelmente mudaria de opiniao em cinco minutos?', 'caos', 'medio');
+
+INSERT INTO admin_users (username, name, password_hash, role, permissions) VALUES
+('admin', 'Administrador', '$2y$10$hbW6OuSoz7TJMmZV7MZsdu8aBQJNJKadA1JPQTiTRnYHje0zdBNJm', 'owner', JSON_ARRAY('all'));
