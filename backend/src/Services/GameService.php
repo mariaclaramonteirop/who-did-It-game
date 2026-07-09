@@ -106,8 +106,11 @@ final class GameService
         if ($username === '' || $email === '' || $name === '' || strlen($password) < 6) {
             throw new HttpException(422, 'Informe nome, usuario, email e senha com pelo menos 6 caracteres.');
         }
-        if ($this->playerAccounts->findByIdentifier($username) !== null || $this->playerAccounts->findByIdentifier($email) !== null) {
-            throw new HttpException(409, 'Ja existe uma conta com esse usuario ou email.');
+        if ($this->playerAccounts->findByIdentifier($username) !== null) {
+            throw new HttpException(409, 'Ja existe um usuario com esse nome.');
+        }
+        if ($this->playerAccounts->findByIdentifier($email) !== null) {
+            throw new HttpException(409, 'Ja existe uma conta com esse email.');
         }
 
         $account = $this->playerAccounts->create([
@@ -160,10 +163,10 @@ final class GameService
             throw new HttpException(422, 'Informe usuario, email e nome validos.');
         }
         if ($this->playerAccounts->findByIdentifierExceptId($username, (int) $current['id']) !== null) {
-            throw new HttpException(409, 'Ja existe um jogador com esse usuario.');
+            throw new HttpException(409, 'Ja existe um usuario com esse nome.');
         }
         if ($this->playerAccounts->findByIdentifierExceptId($email, (int) $current['id']) !== null) {
-            throw new HttpException(409, 'Ja existe um jogador com esse email.');
+            throw new HttpException(409, 'Ja existe uma conta com esse email.');
         }
 
         $data = [

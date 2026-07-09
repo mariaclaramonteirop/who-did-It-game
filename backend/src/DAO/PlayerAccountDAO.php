@@ -56,7 +56,8 @@ final class PlayerAccountDAO
     {
         $stmt = $this->db->prepare(
             'SELECT * FROM player_accounts
-             WHERE username = :identifier OR email = :identifier
+             WHERE LOWER(username) = LOWER(:identifier)
+                OR LOWER(email) = LOWER(:identifier)
              LIMIT 1'
         );
         $stmt->execute(['identifier' => $identifier]);
@@ -67,7 +68,8 @@ final class PlayerAccountDAO
     {
         $stmt = $this->db->prepare(
             'SELECT * FROM player_accounts
-             WHERE (username = :identifier OR email = :identifier)
+             WHERE (LOWER(username) = LOWER(:identifier)
+                OR LOWER(email) = LOWER(:identifier))
                AND id != :exclude_id
              LIMIT 1'
         );

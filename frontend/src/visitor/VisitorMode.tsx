@@ -497,7 +497,7 @@ export function VisitorMode() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-black">{session.name}</h1>
-            <p className="font-bold">Sala {session.code} � criado em {formatDateTime(session.createdAt)}</p>
+            <p className="font-bold">Sala {session.code} foi criado em {formatDateTime(session.createdAt)}</p>
           </div>
           <span className="rounded-md bg-ink px-3 py-1 font-black text-white">{session.phase.toUpperCase()}</span>
         </div>

@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BookOpen, Check, Coffee, Crown, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, ShieldCheck, Users, UserRound } from 'lucide-react';
+import axios from 'axios';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
@@ -423,10 +424,28 @@ function RegisterPage() {
   const next = new URLSearchParams(location.search).get('next') ?? '/';
   const [form, setForm] = useState({ username: '', email: '', name: '', password: '' });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  function validate(current = form) {
+    const nextErrors: Record<string, string> = {};
+    if (!current.username.trim()) nextErrors.username = 'Informe o nome de usuario.';
+    if (!current.email.trim()) nextErrors.email = 'Informe o email.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(current.email.trim())) nextErrors.email = 'Informe um email valido.';
+    if (!current.name.trim()) nextErrors.name = 'Informe o nome.';
+    if (!current.password.trim()) nextErrors.password = 'Informe a senha.';
+    else if (current.password.trim().length < 6) nextErrors.password = 'A senha precisa ter pelo menos 6 caracteres.';
+    return nextErrors;
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const nextErrors = validate();
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setError('Corrija os campos destacados.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -434,7 +453,33 @@ function RegisterPage() {
       savePlayerSession(session.token, session.user);
       navigate(next, { replace: true });
     } catch (err) {
-      setError(apiError(err));
+      const message = apiError(err);
+      const fieldMap: Record<string, string> = {};
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const lower = message.toLowerCase();
+        if (status === 409 || lower.includes('usuario ou email')) {
+          fieldMap.username = 'Este usuario ja esta em uso.';
+          fieldMap.email = 'Este email ja esta em uso.';
+        } else if (lower.includes('usuario')) {
+          fieldMap.username = message;
+        }
+        if (lower.includes('email')) {
+          fieldMap.email = message;
+        }
+        if (lower.includes('nome')) {
+          fieldMap.name = message;
+        }
+        if (lower.includes('senha')) {
+          fieldMap.password = message;
+        }
+      }
+      if (Object.keys(fieldMap).length > 0) {
+        setFieldErrors((current) => ({ ...current, ...fieldMap }));
+        setError('Corrija os campos destacados.');
+        return;
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -450,16 +495,50 @@ function RegisterPage() {
         <ErrorMessage message={error} />
         <form onSubmit={submit} className="grid gap-4">
           <Field label="Nome de usuario">
-            <Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+            <Input
+              value={form.username}
+              onChange={(event) => {
+                const nextForm = { ...form, username: event.target.value };
+                setForm(nextForm);
+                setFieldErrors({ ...fieldErrors, username: '' });
+              }}
+            />
+            <span className="text-sm font-bold text-tomato">{fieldErrors.username}</span>
           </Field>
           <Field label="Email">
-            <Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+            <Input
+              type="email"
+              value={form.email}
+              onChange={(event) => {
+                const nextForm = { ...form, email: event.target.value };
+                setForm(nextForm);
+                setFieldErrors({ ...fieldErrors, email: '' });
+              }}
+            />
+            <span className="text-sm font-bold text-tomato">{fieldErrors.email}</span>
           </Field>
           <Field label="Nome">
-            <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+            <Input
+              value={form.name}
+              onChange={(event) => {
+                const nextForm = { ...form, name: event.target.value };
+                setForm(nextForm);
+                setFieldErrors({ ...fieldErrors, name: '' });
+              }}
+            />
+            <span className="text-sm font-bold text-tomato">{fieldErrors.name}</span>
           </Field>
           <Field label="Senha">
-            <Input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(event) => {
+                const nextForm = { ...form, password: event.target.value };
+                setForm(nextForm);
+                setFieldErrors({ ...fieldErrors, password: '' });
+              }}
+            />
+            <span className="text-sm font-bold text-tomato">{fieldErrors.password}</span>
           </Field>
           <Button disabled={loading}>{loading ? 'Cadastrando...' : 'Cadastrar'}</Button>
         </form>
@@ -595,7 +674,7 @@ function Admin() {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [filters, setFilters] = useState({ search: '', category: 'all', level: 'all', status: 'all' });
-  const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rolÃª?,festa,leve\nQuem fez isso no improviso?,caos,medio');
+  const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rol??,festa,leve\nQuem fez isso no improviso?,caos,medio');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editing, setEditing] = useState(emptyForm);
@@ -1054,7 +1133,7 @@ function Admin() {
                     <div>
                       <p className="text-lg font-black leading-snug">{category.name}</p>
                       <p className="text-sm font-bold text-zinc-700">slug: {category.slug}</p>
-                      <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(category.createdAt)} Â· Atualizada em {formatAdminDate(category.updatedAt)}</p>
+                      <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(category.createdAt)} · Atualizada em {formatAdminDate(category.updatedAt)}</p>
                     </div>
                     <span className={`rounded-md px-2 py-1 text-sm font-black ${category.isActive ? 'bg-teal text-white' : 'bg-zinc-500 text-white'}`}>
                       {category.isActive ? 'Ativa' : 'Inativa'}
@@ -1119,7 +1198,7 @@ function Admin() {
                 <span>{room.code} - {room.name}</span>
                 <span>{room.playersCount} jogador(es)</span>
               </div>
-              <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(room.createdAt)} Â· Atualizada em {formatAdminDate(room.updatedAt)}</p>
+              <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(room.createdAt)} · Atualizada em {formatAdminDate(room.updatedAt)}</p>
               <div className="grid gap-2 sm:grid-cols-4">
                 <Input value={room.name} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, name: event.target.value } : item))} />
                 <Input type="number" value={room.maxPlayers} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, maxPlayers: Number(event.target.value) } : item))} />
@@ -1146,7 +1225,7 @@ function Admin() {
           {players.map((player) => (
             <div key={player.id} className="grid gap-3 rounded-md border-2 border-ink bg-paper p-3">
               <p className="font-black">Sala {player.roomCode} - {player.roomName}</p>
-              <p className="text-xs font-bold text-zinc-600">Cadastrado em {formatAdminDate(player.createdAt)} Â· Atualizado em {formatAdminDate(player.updatedAt)}</p>
+              <p className="text-xs font-bold text-zinc-600">Cadastrado em {formatAdminDate(player.createdAt)} · Atualizado em {formatAdminDate(player.updatedAt)}</p>
               <div className="grid gap-2 sm:grid-cols-3">
                 <Input value={player.name} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} />
                 <Input type="number" value={player.score} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, score: Number(event.target.value) } : item))} />
@@ -1223,7 +1302,7 @@ function Admin() {
                   </label>
                 ))}
               </div>
-              <p className="text-xs font-bold text-zinc-600">Criado em {formatAdminDate(admin.createdAt)} Â· Atualizado em {formatAdminDate(admin.updatedAt)}</p>
+              <p className="text-xs font-bold text-zinc-600">Criado em {formatAdminDate(admin.createdAt)} · Atualizado em {formatAdminDate(admin.updatedAt)}</p>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
@@ -1315,7 +1394,7 @@ function Admin() {
                 ) : (
                   <>
                     <p className="text-lg font-black leading-snug">{question.text}</p>
-                    <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(question.createdAt)} Â· Atualizada em {formatAdminDate(question.updatedAt)}</p>
+                    <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(question.createdAt)} · Atualizada em {formatAdminDate(question.updatedAt)}</p>
                     <div className="flex flex-wrap gap-2 text-sm font-black">
                       <span className="rounded-md bg-white px-2 py-1">{question.category}</span>
                       <span className="rounded-md bg-white px-2 py-1">{question.level}</span>
@@ -1393,7 +1472,7 @@ function BarChart({ title, stats, total }: { title: string; stats: Array<{ label
           <div key={item.label} className="grid gap-1">
             <div className="flex justify-between gap-3 text-sm font-black">
               <span className="truncate">{item.label}</span>
-              <span>{item.value} Â· {percent}%</span>
+              <span>{item.value} · {percent}%</span>
             </div>
             <div className="h-4 overflow-hidden rounded-sm border-2 border-ink bg-white">
               <div className="h-full bg-tomato" style={{ width: `${percent}%` }} />
@@ -1418,7 +1497,7 @@ function RecentList({ title, items }: { title: string; items: Array<{ label: str
               <span className="text-zinc-600">{item.meta}</span>
             </div>
             <p className="mt-1 text-xs text-zinc-600">
-              Criado em {formatAdminDate(item.createdAt)} Â· Atualizado em {formatAdminDate(item.updatedAt)}
+              Criado em {formatAdminDate(item.createdAt)} · Atualizado em {formatAdminDate(item.updatedAt)}
             </p>
           </div>
         ))}
@@ -1521,7 +1600,7 @@ function Lobby() {
         <div className="flex flex-wrap justify-between gap-3">
           <div>
             <h1 className="text-3xl font-black">{room?.name}</h1>
-            <p className="font-bold">Sala {code} Â· {players.length}/{room?.maxPlayers}</p>
+            <p className="font-bold">Sala {code} · {players.length}/{room?.maxPlayers}</p>
           </div>
           <Button variant="ghost" onClick={() => navigate(`/room/${code}/setup-players`)}><Plus size={18} /></Button>
         </div>
