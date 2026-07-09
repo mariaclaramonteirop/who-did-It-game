@@ -22,7 +22,7 @@ export function Button({
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="grid gap-2 text-sm font-black uppercase tracking-wide text-ink">
+    <label className="grid min-w-0 gap-2 text-sm font-black uppercase tracking-wide text-ink">
       {label}
       {children}
     </label>
@@ -30,11 +30,11 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`min-h-12 rounded-md border-2 border-ink bg-white px-3 text-base ${props.className ?? ''}`} />;
+  return <input {...props} className={`min-h-12 w-full min-w-0 rounded-md border-2 border-ink bg-white px-3 text-base ${props.className ?? ''}`} />;
 }
 
 export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={`min-h-12 rounded-md border-2 border-ink bg-white px-3 text-base ${props.className ?? ''}`} />;
+  return <select {...props} className={`min-h-12 w-full min-w-0 rounded-md border-2 border-ink bg-white px-3 text-base ${props.className ?? ''}`} />;
 }
 
 export function Card({ children, className = '', ...props }: React.HTMLAttributes<HTMLElement> & { children: ReactNode }) {

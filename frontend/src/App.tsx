@@ -4,7 +4,7 @@ import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Sav
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
-import type { Category, Player, Question, Room, Round, RoundResult } from './types/game';
+import type { AdminDashboard, AdminPlayer, AdminRoom, AdminUser, Category, Player, Question, Room, Round, RoundResult } from './types/game';
 
 const roundKey = (code: string) => `jdc-round-${code}`;
 
@@ -146,9 +146,21 @@ function CreateRoom() {
 
 function Admin() {
   const emptyForm = { text: '', category: 'geral', level: 'leve' };
+  const [token, setToken] = useState(() => localStorage.getItem('adminToken') ?? '');
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
+    const stored = localStorage.getItem('adminUser');
+    return stored ? JSON.parse(stored) as AdminUser : null;
+  });
+  const [login, setLogin] = useState({ username: 'admin', password: '' });
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
+  const [rooms, setRooms] = useState<AdminRoom[]>([]);
+  const [players, setPlayers] = useState<AdminPlayer[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [filters, setFilters] = useState({ search: '', category: 'all', level: 'all', status: 'all' });
   const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rolê?,festa,leve\nQuem fez isso no improviso?,caos,medio');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -156,23 +168,44 @@ function Admin() {
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '' });
   const [categoryEditingId, setCategoryEditingId] = useState<number | null>(null);
   const [categoryEditing, setCategoryEditing] = useState({ name: '', slug: '' });
+  const [adminForm, setAdminForm] = useState({ username: '', name: '', password: '', role: 'manager', permissions: ['questions', 'categories'] });
+  const [adminPasswords, setAdminPasswords] = useState<Record<number, string>>({});
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const activeCount = questions.filter((question) => question.isActive).length;
   const inactiveCount = questions.length - activeCount;
   const categoryStats = buildStats(questions.map((question) => question.category));
   const levelStats = buildStats(questions.map((question) => question.level));
+  const permissions = currentUser?.permissions ?? [];
+  const can = (permission: string) => permissions.includes('all') || permissions.includes(permission);
+  const filteredQuestions = questions.filter((question) => {
+    const search = filters.search.trim().toLowerCase();
+    const matchesSearch = !search || question.text.toLowerCase().includes(search);
+    const matchesCategory = filters.category === 'all' || question.category === filters.category;
+    const matchesLevel = filters.level === 'all' || question.level === filters.level;
+    const matchesStatus = filters.status === 'all' || (filters.status === 'active' ? question.isActive : !question.isActive);
+    return matchesSearch && matchesCategory && matchesLevel && matchesStatus;
+  });
 
-  async function load() {
+  async function load(nextToken = token) {
+    if (!nextToken) return;
     setLoading(true);
     setError('');
     try {
-      const [loadedQuestions, loadedCategories] = await Promise.all([
+      const [loadedQuestions, loadedCategories, loadedDashboard, loadedRooms, loadedPlayers, loadedAdmins] = await Promise.all([
         gameApi.listQuestions(true),
         gameApi.listCategories(true),
+        gameApi.adminDashboard(nextToken),
+        can('rooms') ? gameApi.adminRooms(nextToken) : Promise.resolve([]),
+        can('players') ? gameApi.adminPlayers(nextToken) : Promise.resolve([]),
+        can('admins') ? gameApi.adminUsers(nextToken) : Promise.resolve([]),
       ]);
       setQuestions(loadedQuestions);
       setCategories(loadedCategories);
+      setDashboard(loadedDashboard);
+      setRooms(loadedRooms);
+      setPlayers(loadedPlayers);
+      setAdminUsers(loadedAdmins);
     } catch (err) {
       setError(apiError(err));
     } finally {
@@ -182,14 +215,37 @@ function Admin() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [token]);
+
+  async function submitLogin(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    try {
+      const session = await gameApi.adminLogin(login);
+      localStorage.setItem('adminToken', session.token);
+      localStorage.setItem('adminUser', JSON.stringify(session.user));
+      setToken(session.token);
+      setCurrentUser(session.user);
+      setLogin({ username: session.user.username, password: '' });
+      setActiveTab('dashboard');
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    setToken('');
+    setCurrentUser(null);
+  }
 
   async function createQuestion(event: FormEvent) {
     event.preventDefault();
     setError('');
     if (!form.text.trim()) return setError('Informe a pergunta.');
     try {
-      await gameApi.createQuestion({ ...form, text: form.text.trim() });
+      await gameApi.createQuestion(token, { ...form, text: form.text.trim() });
       setForm(emptyForm);
       load();
     } catch (err) {
@@ -201,7 +257,7 @@ function Admin() {
     event.preventDefault();
     setError('');
     try {
-      await gameApi.importQuestionsCsv(importCsv);
+      await gameApi.importQuestionsCsv(token, importCsv);
       load();
     } catch (err) {
       setError(apiError(err));
@@ -216,7 +272,7 @@ function Admin() {
       return;
     }
     try {
-      await gameApi.importQuestionsFile(importFile);
+      await gameApi.importQuestionsFile(token, importFile);
       setImportFile(null);
       load();
     } catch (err) {
@@ -233,7 +289,7 @@ function Admin() {
     setError('');
     if (!editing.text.trim()) return setError('Informe a pergunta.');
     try {
-      await gameApi.updateQuestion(question.id, { ...editing, text: editing.text.trim(), isActive: question.isActive });
+      await gameApi.updateQuestion(token, question.id, { ...editing, text: editing.text.trim(), isActive: question.isActive });
       setEditingId(null);
       load();
     } catch (err) {
@@ -245,9 +301,9 @@ function Admin() {
     setError('');
     try {
       if (question.isActive) {
-        await gameApi.deactivateQuestion(question.id);
+        await gameApi.deactivateQuestion(token, question.id);
       } else {
-        await gameApi.updateQuestion(question.id, { isActive: true });
+        await gameApi.updateQuestion(token, question.id, { isActive: true });
       }
       load();
     } catch (err) {
@@ -260,7 +316,7 @@ function Admin() {
     setError('');
     if (!categoryForm.name.trim()) return setError('Informe o nome da categoria.');
     try {
-      await gameApi.createCategory({ name: categoryForm.name.trim(), slug: categoryForm.slug.trim() || undefined });
+      await gameApi.createCategory(token, { name: categoryForm.name.trim(), slug: categoryForm.slug.trim() || undefined });
       setCategoryForm({ name: '', slug: '' });
       load();
     } catch (err) {
@@ -277,7 +333,7 @@ function Admin() {
     setError('');
     if (!categoryEditing.name.trim()) return setError('Informe o nome da categoria.');
     try {
-      await gameApi.updateCategory(category.id, {
+      await gameApi.updateCategory(token, category.id, {
         name: categoryEditing.name.trim(),
         slug: categoryEditing.slug.trim(),
       });
@@ -292,9 +348,9 @@ function Admin() {
     setError('');
     try {
       if (category.isActive) {
-        await gameApi.deactivateCategory(category.id);
+        await gameApi.deactivateCategory(token, category.id);
       } else {
-        await gameApi.updateCategory(category.id, { isActive: true });
+        await gameApi.updateCategory(token, category.id, { isActive: true });
       }
       load();
     } catch (err) {
@@ -302,20 +358,195 @@ function Admin() {
     }
   }
 
+  async function updateRoom(room: AdminRoom) {
+    setError('');
+    try {
+      await gameApi.updateAdminRoom(token, room.roomId, room);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function deleteRoom(room: AdminRoom) {
+    setError('');
+    try {
+      await gameApi.deleteAdminRoom(token, room.roomId);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function updatePlayer(player: AdminPlayer) {
+    setError('');
+    try {
+      await gameApi.updateAdminPlayer(token, player.id, player);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function deletePlayer(player: AdminPlayer) {
+    setError('');
+    try {
+      await gameApi.deleteAdminPlayer(token, player.id);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function createAdmin(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    try {
+      await gameApi.createAdminUser(token, adminForm);
+      setAdminForm({ username: '', name: '', password: '', role: 'manager', permissions: ['questions', 'categories'] });
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function updateAdmin(admin: AdminUser, payload: Partial<AdminUser> & { password?: string }) {
+    setError('');
+    try {
+      await gameApi.updateAdminUser(token, admin.id, payload);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  function toggleAdminFormPermission(permission: string) {
+    const hasPermission = adminForm.permissions.includes(permission);
+    setAdminForm({
+      ...adminForm,
+      permissions: hasPermission
+        ? adminForm.permissions.filter((item) => item !== permission)
+        : [...adminForm.permissions, permission],
+    });
+  }
+
+  function toggleAdminPermission(admin: AdminUser, permission: string) {
+    const hasPermission = admin.permissions.includes(permission);
+    setAdminUsers(adminUsers.map((item) => item.id === admin.id ? {
+      ...item,
+      permissions: hasPermission
+        ? item.permissions.filter((current) => current !== permission)
+        : [...item.permissions, permission],
+    } : item));
+  }
+
+  if (!token) {
+    return (
+      <Shell>
+        <Card className="grid gap-4">
+          <h1 className="text-3xl font-black">Admin</h1>
+          <form onSubmit={submitLogin} className="grid gap-3">
+            <Field label="Usuario">
+              <Input value={login.username} onChange={(event) => setLogin({ ...login, username: event.target.value })} />
+            </Field>
+            <Field label="Senha">
+              <Input type="password" value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} />
+            </Field>
+            <Button type="submit">Entrar</Button>
+          </form>
+          <ErrorMessage message={error} />
+        </Card>
+      </Shell>
+    );
+  }
+
+  const tabs = [
+    ['dashboard', 'Dashboard', true],
+    ['questions', 'Perguntas', can('questions')],
+    ['categories', 'Categorias', can('categories')],
+    ['import', 'Importar', can('questions')],
+    ['rooms', 'Salas', can('rooms')],
+    ['players', 'Usuarios', can('players')],
+    ['admins', 'Admins', can('admins')],
+    ['stats', 'Graficos', true],
+  ] as const;
+
   return (
     <Shell>
       <section className="grid gap-4">
         <div className="rounded-lg border-2 border-ink bg-gold p-5 shadow-crisp">
-          <h1 className="text-3xl font-black">Admin</h1>
-          <p className="mt-2 font-bold">Gerencie as perguntas do Quem fez isso? Who Did It?</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-black">Admin</h1>
+              <p className="mt-2 font-bold">Quem fez isso? Who Did It?</p>
+            </div>
+            <Button type="button" variant="ghost" onClick={logout}>Sair</Button>
+          </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-4">
-          <button type="button" onClick={() => document.getElementById('admin-questions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Perguntas</button>
-          <button type="button" onClick={() => document.getElementById('admin-categories')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Categorias</button>
-          <button type="button" onClick={() => document.getElementById('admin-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Importar</button>
-          <button type="button" onClick={() => document.getElementById('admin-stats')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-md border-2 border-ink bg-paper px-3 py-2 text-sm font-black">Graficos</button>
+          {tabs.filter(([, , visible]) => visible).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`rounded-md border-2 border-ink px-3 py-2 text-sm font-black ${activeTab === id ? 'bg-teal text-white' : 'bg-paper'}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <ErrorMessage message={error} />
+        {loading ? <Loading /> : null}
+        {activeTab === 'dashboard' && dashboard ? (
+          <Card className="grid gap-4">
+            <h2 className="text-2xl font-black">Dashboard</h2>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatBox label="Salas" value={dashboard.totals.rooms ?? 0} tone="bg-gold" />
+              <StatBox label="Jogadores" value={dashboard.totals.players ?? 0} tone="bg-teal text-white" />
+              <StatBox label="Perguntas" value={dashboard.totals.questions ?? 0} tone="bg-zinc-700 text-white" />
+              <StatBox label="Categorias" value={dashboard.totals.categories ?? 0} tone="bg-paper" />
+              <StatBox label="Salas ativas" value={dashboard.totals.activeRooms ?? 0} tone="bg-paper" />
+              <StatBox label="Vencedores" value={dashboard.totals.winners ?? 0} tone="bg-paper" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <BarChart title="Salas por status" stats={dashboard.roomsByStatus} total={Math.max(1, dashboard.totals.rooms ?? 0)} />
+              <BarChart title="Jogadores por sala" stats={dashboard.playersByRoom} total={Math.max(1, dashboard.totals.players ?? 0)} />
+              <BarChart title="Perguntas por categoria" stats={dashboard.questionsByCategory} total={Math.max(1, dashboard.totals.questions ?? 0)} />
+              <BarChart title="Perguntas por nivel" stats={dashboard.questionsByLevel} total={Math.max(1, dashboard.totals.questions ?? 0)} />
+              <BarChart title="Admins por perfil" stats={dashboard.adminsByRole} total={Math.max(1, dashboard.totals.admins ?? 0)} />
+              <BarChart title="Admins por status" stats={dashboard.adminsByStatus} total={Math.max(1, dashboard.totals.admins ?? 0)} />
+            </div>
+            <div className="grid gap-2">
+              <h3 className="text-xl font-black">Atividade por data</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <BarChart title="Salas criadas" stats={dashboard.roomsByDate} total={Math.max(1, maxStatValue(dashboard.roomsByDate))} />
+                <BarChart title="Usuarios cadastrados" stats={dashboard.playersByDate} total={Math.max(1, maxStatValue(dashboard.playersByDate))} />
+                <BarChart title="Perguntas cadastradas" stats={dashboard.questionsByDate} total={Math.max(1, maxStatValue(dashboard.questionsByDate))} />
+                <BarChart title="Admins cadastrados" stats={dashboard.adminsByDate} total={Math.max(1, maxStatValue(dashboard.adminsByDate))} />
+                <BarChart title="Vencedores por data" stats={dashboard.winnersByDate} total={Math.max(1, maxStatValue(dashboard.winnersByDate))} />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <h3 className="text-xl font-black">Cadastros recentes</h3>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <RecentList title="Salas" items={dashboard.recentRooms} />
+                <RecentList title="Usuarios" items={dashboard.recentPlayers} />
+                <RecentList title="Perguntas" items={dashboard.recentQuestions} />
+                <RecentList title="Admins" items={dashboard.recentAdmins} />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <h3 className="text-xl font-black">Vencedores recentes</h3>
+              {dashboard.recentWinners.length === 0 ? <p className="font-bold">Nenhum vencedor ainda.</p> : null}
+              {dashboard.recentWinners.map((winner) => (
+                <div key={`${winner.playerId}-${winner.roomCode}`} className="rounded-md border-2 border-ink bg-paper p-3 font-bold">
+                  {winner.name} fez {winner.score} ponto(s) na sala {winner.roomCode} - {winner.roomName}
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+        {activeTab === 'questions' ? (
         <Card id="admin-questions">
           <form onSubmit={createQuestion} className="grid gap-4">
             <h2 className="text-2xl font-black">Nova pergunta</h2>
@@ -346,6 +577,8 @@ function Admin() {
             <Button type="submit"><Plus className="mr-2 inline" size={18} /> Adicionar</Button>
           </form>
         </Card>
+        ) : null}
+        {activeTab === 'categories' ? (
         <Card id="admin-categories" className="grid gap-4">
           <h2 className="text-2xl font-black">Categorias</h2>
           <form onSubmit={createCategory} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
@@ -387,6 +620,7 @@ function Admin() {
                     <div>
                       <p className="text-lg font-black leading-snug">{category.name}</p>
                       <p className="text-sm font-bold text-zinc-700">slug: {category.slug}</p>
+                      <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(category.createdAt)} · Atualizada em {formatAdminDate(category.updatedAt)}</p>
                     </div>
                     <span className={`rounded-md px-2 py-1 text-sm font-black ${category.isActive ? 'bg-teal text-white' : 'bg-zinc-500 text-white'}`}>
                       {category.isActive ? 'Ativa' : 'Inativa'}
@@ -417,6 +651,8 @@ function Admin() {
             ))}
           </div>
         </Card>
+        ) : null}
+        {activeTab === 'import' ? (
         <Card id="admin-import" className="grid gap-4">
           <h2 className="text-2xl font-black">Importar perguntas</h2>
           <p className="font-bold">Formato aceito no CSV: `text,category,level`.</p>
@@ -438,6 +674,143 @@ function Admin() {
             <Button type="submit">Importar CSV</Button>
           </form>
         </Card>
+        ) : null}
+        {activeTab === 'rooms' ? (
+        <Card className="grid gap-3">
+          <h2 className="text-2xl font-black">Salas</h2>
+          {rooms.length === 0 ? <p className="font-bold">Nenhuma sala encontrada.</p> : null}
+          {rooms.map((room) => (
+            <div key={room.roomId} className="grid gap-3 rounded-md border-2 border-ink bg-paper p-3">
+              <div className="flex flex-wrap justify-between gap-2 font-black">
+                <span>{room.code} - {room.name}</span>
+                <span>{room.playersCount} jogador(es)</span>
+              </div>
+              <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(room.createdAt)} · Atualizada em {formatAdminDate(room.updatedAt)}</p>
+              <div className="grid gap-2 sm:grid-cols-4">
+                <Input value={room.name} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, name: event.target.value } : item))} />
+                <Input type="number" value={room.maxPlayers} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, maxPlayers: Number(event.target.value) } : item))} />
+                <Input type="number" value={room.maxScore} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, maxScore: Number(event.target.value) } : item))} />
+                <Select value={room.status} onChange={(event) => setRooms(rooms.map((item) => item.roomId === room.roomId ? { ...item, status: event.target.value as Room['status'] } : item))}>
+                  <option value="waiting_players">Aguardando</option>
+                  <option value="ready">Pronta</option>
+                  <option value="in_progress">Em jogo</option>
+                  <option value="finished">Finalizada</option>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" onClick={() => updateRoom(room)}>Salvar</Button>
+                <Button type="button" variant="ghost" onClick={() => deleteRoom(room)}>Excluir</Button>
+              </div>
+            </div>
+          ))}
+        </Card>
+        ) : null}
+        {activeTab === 'players' ? (
+        <Card className="grid gap-3">
+          <h2 className="text-2xl font-black">Usuarios do jogo</h2>
+          {players.length === 0 ? <p className="font-bold">Nenhum usuario encontrado.</p> : null}
+          {players.map((player) => (
+            <div key={player.id} className="grid gap-3 rounded-md border-2 border-ink bg-paper p-3">
+              <p className="font-black">Sala {player.roomCode} - {player.roomName}</p>
+              <p className="text-xs font-bold text-zinc-600">Cadastrado em {formatAdminDate(player.createdAt)} · Atualizado em {formatAdminDate(player.updatedAt)}</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Input value={player.name} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} />
+                <Input type="number" value={player.score} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, score: Number(event.target.value) } : item))} />
+                <label className="flex items-center gap-2 rounded-md border-2 border-ink bg-white px-3 py-2 font-black">
+                  <input type="checkbox" checked={!!player.isHost} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, isHost: event.target.checked } : item))} />
+                  Host
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" onClick={() => updatePlayer(player)}>Salvar</Button>
+                <Button type="button" variant="ghost" onClick={() => deletePlayer(player)}>Excluir</Button>
+              </div>
+            </div>
+          ))}
+        </Card>
+        ) : null}
+        {activeTab === 'admins' ? (
+        <Card className="grid gap-4">
+          <h2 className="text-2xl font-black">Administradores</h2>
+          <form onSubmit={createAdmin} className="grid gap-3">
+              <div className="grid gap-3 md:grid-cols-3 items-start">
+                <Field label="Usuario"><Input value={adminForm.username} onChange={(event) => setAdminForm({ ...adminForm, username: event.target.value })} /></Field>
+                <Field label="Nome"><Input value={adminForm.name} onChange={(event) => setAdminForm({ ...adminForm, name: event.target.value })} /></Field>
+                <Field label="Senha"><Input type="password" value={adminForm.password} onChange={(event) => setAdminForm({ ...adminForm, password: event.target.value })} /></Field>
+              </div>
+            <Field label="Perfil">
+              <Select value={adminForm.role} onChange={(event) => setAdminForm({ ...adminForm, role: event.target.value })}>
+                <option value="owner">Owner</option>
+                <option value="manager">Manager</option>
+                <option value="viewer">Viewer</option>
+              </Select>
+            </Field>
+            <div className="grid gap-2 sm:grid-cols-5">
+              {['questions', 'categories', 'rooms', 'players', 'admins'].map((permission) => (
+                <label key={permission} className="flex items-center gap-2 rounded-md border-2 border-ink bg-white px-3 py-2 font-black">
+                  <input type="checkbox" checked={adminForm.permissions.includes(permission)} onChange={() => toggleAdminFormPermission(permission)} />
+                  {permission}
+                </label>
+              ))}
+            </div>
+            <Button type="submit">Cadastrar admin</Button>
+          </form>
+          {adminUsers.map((admin) => (
+            <div key={admin.id} className="grid gap-2 rounded-md border-2 border-ink bg-paper p-3">
+              <div className="flex flex-wrap justify-between gap-2 font-black">
+                <span>{admin.username}</span>
+                <span>{admin.isActive ? 'Ativo' : 'Inativo'}</span>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3 items-start">
+                <Field label="Nome">
+                  <Input value={admin.name} onChange={(event) => setAdminUsers(adminUsers.map((item) => item.id === admin.id ? { ...item, name: event.target.value } : item))} />
+                </Field>
+                <Field label="Perfil">
+                  <Select value={admin.role} onChange={(event) => setAdminUsers(adminUsers.map((item) => item.id === admin.id ? { ...item, role: event.target.value as AdminUser['role'] } : item))}>
+                    <option value="owner">Owner</option>
+                    <option value="manager">Manager</option>
+                    <option value="viewer">Viewer</option>
+                  </Select>
+                </Field>
+                <Field label="Nova senha">
+                  <Input
+                    type="password"
+                    value={adminPasswords[admin.id] ?? ''}
+                    onChange={(event) => setAdminPasswords({ ...adminPasswords, [admin.id]: event.target.value })}
+                    placeholder="Opcional"
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {['questions', 'categories', 'rooms', 'players', 'admins'].map((permission) => (
+                  <label key={permission} className="flex items-center gap-2 rounded-md border-2 border-ink bg-white px-3 py-2 font-black">
+                    <input type="checkbox" checked={admin.permissions.includes(permission) || admin.permissions.includes('all')} onChange={() => toggleAdminPermission(admin, permission)} />
+                    {permission}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs font-bold text-zinc-600">Criado em {formatAdminDate(admin.createdAt)} · Atualizado em {formatAdminDate(admin.updatedAt)}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  onClick={() => updateAdmin(admin, {
+                    name: admin.name,
+                    role: admin.role,
+                    permissions: admin.permissions,
+                    password: adminPasswords[admin.id] || undefined,
+                  })}
+                >
+                  Salvar
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => updateAdmin(admin, { isActive: !admin.isActive })}>
+                  {admin.isActive ? 'Desativar' : 'Ativar'}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </Card>
+        ) : null}
+        {activeTab === 'stats' ? (
         <Card id="admin-stats" className="grid gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-black">Graficos</h2>
@@ -453,14 +826,44 @@ function Admin() {
             <BarChart title="Por nivel" stats={levelStats} total={questions.length} />
           </div>
         </Card>
+        ) : null}
+        {activeTab === 'questions' ? (
         <Card className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-black">Perguntas</h2>
-            <span className="rounded-md bg-ink px-3 py-1 text-sm font-black text-white">{questions.length}</span>
+            <span className="rounded-md bg-ink px-3 py-1 text-sm font-black text-white">{filteredQuestions.length}/{questions.length}</span>
           </div>
-          {loading ? <Loading /> : null}
+          <div className="grid gap-3 md:grid-cols-4 items-start">
+            <Field label="Buscar">
+              <Input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Texto" />
+            </Field>
+            <Field label="Categoria">
+              <Select value={filters.category} onChange={(event) => setFilters({ ...filters, category: event.target.value })}>
+                <option value="all">Todas</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.slug}>{category.name}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Nivel">
+              <Select value={filters.level} onChange={(event) => setFilters({ ...filters, level: event.target.value })}>
+                <option value="all">Todos</option>
+                <option value="leve">Leve</option>
+                <option value="medio">Medio</option>
+                <option value="pesado">Pesado</option>
+                <option value="caos">Caos</option>
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+                <option value="all">Todos</option>
+                <option value="active">Ativas</option>
+                <option value="inactive">Inativas</option>
+              </Select>
+            </Field>
+          </div>
           <div className="grid gap-3">
-            {questions.map((question) => (
+            {filteredQuestions.map((question) => (
               <div key={question.id} className={`grid gap-3 rounded-md border-2 border-ink p-3 ${question.isActive ? 'bg-paper' : 'bg-zinc-200 opacity-75'}`}>
                 {editingId === question.id ? (
                   <>
@@ -478,6 +881,7 @@ function Admin() {
                 ) : (
                   <>
                     <p className="text-lg font-black leading-snug">{question.text}</p>
+                    <p className="text-xs font-bold text-zinc-600">Criada em {formatAdminDate(question.createdAt)} · Atualizada em {formatAdminDate(question.updatedAt)}</p>
                     <div className="flex flex-wrap gap-2 text-sm font-black">
                       <span className="rounded-md bg-white px-2 py-1">{question.category}</span>
                       <span className="rounded-md bg-white px-2 py-1">{question.level}</span>
@@ -502,6 +906,7 @@ function Admin() {
             ))}
           </div>
         </Card>
+        ) : null}
       </section>
     </Shell>
   );
@@ -517,6 +922,21 @@ function buildStats(items: string[]) {
   )
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+}
+
+function formatAdminDate(value?: string | null) {
+  if (!value) return 'Sem data';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function maxStatValue(stats: Array<{ value: number }>) {
+  return Math.max(0, ...stats.map((stat) => stat.value));
 }
 
 function StatBox({ label, value, tone }: { label: string; value: number; tone: string }) {
@@ -547,6 +967,28 @@ function BarChart({ title, stats, total }: { title: string; stats: Array<{ label
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function RecentList({ title, items }: { title: string; items: Array<{ label: string; createdAt?: string | null; updatedAt?: string | null; meta: string }> }) {
+  return (
+    <div className="grid gap-2 rounded-md border-2 border-ink bg-paper p-3">
+      <h4 className="text-lg font-black">{title}</h4>
+      <div className="grid gap-2">
+        {items.length === 0 ? <p className="text-sm font-bold">Sem registros recentes.</p> : null}
+        {items.map((item) => (
+          <div key={`${title}-${item.label}-${item.createdAt ?? 'na'}`} className="rounded-md border border-ink bg-white p-2 text-sm font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="truncate">{item.label}</span>
+              <span className="text-zinc-600">{item.meta}</span>
+            </div>
+            <p className="mt-1 text-xs text-zinc-600">
+              Criado em {formatAdminDate(item.createdAt)} · Atualizado em {formatAdminDate(item.updatedAt)}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

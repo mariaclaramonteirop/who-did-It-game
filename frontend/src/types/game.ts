@@ -49,6 +49,8 @@ export type Question = {
   category: string;
   level: string;
   isActive: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
 export type Category = {
@@ -56,4 +58,51 @@ export type Category = {
   slug: string;
   name: string;
   isActive: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AdminUser = {
+  id: number;
+  username: string;
+  name: string;
+  role: 'owner' | 'manager' | 'viewer';
+  permissions: string[];
+  isActive: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AdminRoom = Room & {
+  playersCount: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AdminPlayer = Player & {
+  roomId: number;
+  roomCode: string;
+  roomName: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AdminDashboard = {
+  totals: Record<string, number>;
+  roomsByStatus: Array<{ label: string; value: number }>;
+  questionsByCategory: Array<{ label: string; value: number }>;
+  questionsByLevel: Array<{ label: string; value: number }>;
+  adminsByRole: Array<{ label: string; value: number }>;
+  adminsByStatus: Array<{ label: string; value: number }>;
+  playersByRoom: Array<{ label: string; value: number }>;
+  roomsByDate: Array<{ label: string; value: number }>;
+  playersByDate: Array<{ label: string; value: number }>;
+  questionsByDate: Array<{ label: string; value: number }>;
+  adminsByDate: Array<{ label: string; value: number }>;
+  winnersByDate: Array<{ label: string; value: number }>;
+  recentRooms: Array<{ label: string; createdAt?: string | null; updatedAt?: string | null; meta: string }>;
+  recentPlayers: Array<{ label: string; createdAt?: string | null; updatedAt?: string | null; meta: string }>;
+  recentQuestions: Array<{ label: string; createdAt?: string | null; updatedAt?: string | null; meta: string }>;
+  recentAdmins: Array<{ label: string; createdAt?: string | null; updatedAt?: string | null; meta: string }>;
+  recentWinners: Array<{ playerId: number; name: string; score: number; roomCode: string; roomName: string }>;
 };
