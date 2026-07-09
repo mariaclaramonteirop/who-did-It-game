@@ -48,15 +48,16 @@ function Home() {
         <div className="grid gap-4 sm:grid-cols-3">
           <Card className="grid content-between gap-4">
             <Users size={36} className="text-tomato" />
-            <h2 className="text-2xl font-black">Jogar online</h2>
+            <h2 className="text-2xl font-black">Logar</h2>
+            <p className="font-bold">Entrar com numero da sala e jogar conectado.</p>
             <Button onClick={() => navigate('/create-room')}>
               Criar <ArrowRight className="ml-2 inline" size={18} />
             </Button>
           </Card>
           <Card>
             <form onSubmit={enterRoom} className="grid gap-4">
-              <h2 className="text-2xl font-black">Entrar</h2>
-              <Field label="Codigo">
+              <h2 className="text-2xl font-black">Entrar na sala</h2>
+              <Field label="Numero da sala">
                 <Input value={code} onChange={(event) => setCode(event.target.value)} placeholder="4821" />
               </Field>
               <Button type="submit" variant="secondary">Abrir sala</Button>
