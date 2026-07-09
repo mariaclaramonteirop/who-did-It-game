@@ -202,6 +202,10 @@ final class GameService
 
         $votesReceived = $this->votes->countByRound($roundId);
         $totalPlayers = $this->players->countByRoom((int) $round['room_id']);
+        if ($votesReceived < $totalPlayers) {
+            $room = $this->roomById((int) $round['room_id']);
+            $this->rounds->updateVoteDeadline($roundId, $this->voteDeadlineForRoom($room));
+        }
 
         return [
             'message' => 'Voto registrado.',
@@ -1038,16 +1042,23 @@ final class GameService
 
         $roomPlayers = $this->players->listByRoom((int) $round['room_id']);
         $votedPlayerIds = $this->votes->votedPlayerIdsByRound($roundId);
-        $missingPlayers = array_filter($roomPlayers, fn (array $player) => !in_array((int) $player['id'], $votedPlayerIds, true));
+        foreach ($roomPlayers as $player) {
+            if (in_array((int) $player['id'], $votedPlayerIds, true)) {
+                continue;
+            }
 
-        foreach ($missingPlayers as $player) {
             $this->votes->create($roundId, (int) $player['id'], null);
+            break;
         }
 
         $votesReceived = $this->votes->countByRound($roundId);
         $totalPlayers = count($roomPlayers);
         if ($votesReceived >= $totalPlayers) {
             $this->closeRound($round, $roundId);
+            return;
         }
+
+        $room = $this->roomById((int) $round['room_id']);
+        $this->rounds->updateVoteDeadline($roundId, $this->voteDeadlineForRoom($room));
     }
 }

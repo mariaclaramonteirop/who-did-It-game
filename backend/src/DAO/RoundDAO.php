@@ -59,6 +59,15 @@ final class RoundDAO
         $stmt->execute(['id' => $roundId]);
     }
 
+    public function updateVoteDeadline(int $roundId, ?string $voteDeadlineAt): void
+    {
+        $stmt = $this->db->prepare('UPDATE rounds SET vote_deadline_at = :vote_deadline_at WHERE id = :id');
+        $stmt->execute([
+            'id' => $roundId,
+            'vote_deadline_at' => $voteDeadlineAt,
+        ]);
+    }
+
     private function addColumnIfMissing(string $table, string $column, string $sql): void
     {
         if ($this->columnExists($table, $column)) {
