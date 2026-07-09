@@ -1,5 +1,7 @@
 # Quem fez isso? Who Did It?
 
+![Logo do jogo](frontend/public/logo.png)
+
 Sistema web de party game com perguntas aleatorias, votacao entre amigos, contagem de votos, pontuacao por rodada, ranking final e administracao.
 
 ## Stack
@@ -26,8 +28,11 @@ Sistema web de party game com perguntas aleatorias, votacao entre amigos, contag
 - Importacao em lote de perguntas via CSV ou JSON no admin
 - Cadastro e gerenciamento de categorias no admin
 - Selecao de uma ou mais categorias ao criar sala
-- Tela inicial com escolha entre jogo online e modo visitante/anônimo
+- Tela inicial com escolha entre jogo online e modo visitante/anonimo
 - Modo visitante rodando no navegador, sem login e sem backend
+- Camada de sessao para jogadores com login por email ou usuario
+- Tela unica de login com link para cadastro
+- Salas protegidas por sessao no fluxo online
 
 ## Como rodar
 
@@ -39,6 +44,8 @@ Servicos:
 
 - Frontend: http://localhost:5173
 - Admin: http://localhost:5173/admin
+- Login jogador: http://localhost:5173/acesso
+- Cadastro jogador: http://localhost:5173/cadastro
 - Visitante: http://localhost:5173/visitante
 - Backend: http://localhost:8080
 - phpMyAdmin: http://localhost:8081
@@ -60,6 +67,17 @@ O admin abre com login e nao aparece na navegacao do jogo. Credencial inicial lo
 No Docker, esses valores podem ser alterados por `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_SECRET`.
 O admin tem menu em abas: Dashboard, Perguntas, Categorias, Importar, Salas, Usuarios, Admins e Graficos. A aba Perguntas tem filtros por texto, categoria, nivel e status. Administradores podem ter permissoes para `questions`, `categories`, `rooms`, `players`, `admins` ou `all`.
 O modo visitante nao depende de login e salva a sessao localmente no navegador.
+
+## Sessao do jogador
+
+O fluxo online agora exige login antes de acessar as salas.
+
+- Login com `email` ou `nome de usuario`
+- Cadastro com `username`, `email`, `name` e `password`
+- Token salvo no navegador para manter a sessao
+- Rotas de sala protegidas no frontend e no backend
+- Ao abrir a sala logado, o player entra automaticamente com o nome da conta
+- Modo visitante continua separado e sem login
 
 Credenciais do banco:
 
@@ -177,3 +195,4 @@ docker-compose.yml
 
 - Migrar perguntas antigas para categorias cadastradas quando houver padronizacao final dos nomes.
 - Permitir selecionar categorias por checkbox em vez de select multiplo.
+
