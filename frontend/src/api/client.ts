@@ -40,6 +40,7 @@ export const gameApi = {
   createRoom: (token: string, payload: unknown) => api.post<Room>('/rooms', payload, auth(token)).then((r) => r.data),
   getRoom: (token: string, code: string) => api.get<Room>(`/rooms/${code}`, auth(token)).then((r) => r.data),
   addPlayer: (token: string, code: string, name: string) => api.post<Player>(`/rooms/${code}/players`, { name }, auth(token)).then((r) => r.data),
+  removeRoomPlayer: (token: string, code: string, id: number) => api.delete(`/rooms/${code}/players/${id}`, auth(token)).then((r) => r.data),
   startRoom: (token: string, code: string) => api.post<Room>(`/rooms/${code}/start`, undefined, auth(token)).then((r) => r.data),
   createRound: (token: string, code: string) => api.post<Round>(`/rooms/${code}/rounds`, undefined, auth(token)).then((r) => r.data),
   getRound: (token: string, id: number) => api.get<Round>(`/rounds/${id}`, auth(token)).then((r) => r.data),

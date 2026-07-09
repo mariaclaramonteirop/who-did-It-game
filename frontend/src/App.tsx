@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BookOpen, Check, Coffee, Crown, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, ShieldCheck, Users, UserRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, Coffee, Crown, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, ShieldCheck, Trash2, Users, UserRound } from 'lucide-react';
 import axios from 'axios';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
@@ -59,7 +59,7 @@ function Shell({ children }: { children: ReactNode }) {
             </Button>
           ) : null}
           <Link to="/" className="flex min-w-0 items-center gap-3">
-            <img src="/logo.png" alt="Quem fez isso?" className="h-11 w-11 shrink-0 rounded-md border-2 border-ink bg-white object-contain" />
+            <img src="/logo.png" alt="Quem fez isso?" className="h-14 w-14 shrink-0 object-contain" />
             <div className="min-w-0">
               <p className="truncate text-xl font-black text-ink sm:text-2xl">Quem fez isso?</p>
               <p className="truncate text-xs font-black uppercase tracking-wide text-zinc-600">Who Did It?</p>
@@ -1537,9 +1537,19 @@ function SetupPlayers() {
   const { room, error, loading, reload } = useRoom(code);
   const navigate = useNavigate();
   const user = loadPlayerUser();
+  const token = loadPlayerToken();
 
   if (loading) return <Shell><Loading /></Shell>;
   const players = room?.players ?? [];
+
+  async function removePlayer(playerId: number) {
+    try {
+      await gameApi.removeRoomPlayer(token, code, playerId);
+      reload();
+    } catch (err) {
+      window.alert(apiError(err));
+    }
+  }
 
   return (
     <Shell>
@@ -1557,7 +1567,12 @@ function SetupPlayers() {
         </div>
         <div className="grid gap-2">
           {players.map((player) => (
-            <div key={player.id} className="rounded-md border-2 border-ink bg-paper px-3 py-2 font-black">{player.name}</div>
+            <div key={player.id} className="flex items-center justify-between gap-3 rounded-md border-2 border-ink bg-paper px-3 py-2 font-black">
+              <span className="min-w-0 truncate">{player.name}</span>
+              <Button type="button" variant="ghost" className="flex h-10 w-10 shrink-0 items-center justify-center px-0" onClick={() => removePlayer(player.id)} aria-label={`Remover ${player.name}`}>
+                <Trash2 size={16} className="shrink-0" />
+              </Button>
+            </div>
           ))}
         </div>
         <Button variant="secondary" type="button" onClick={() => reload()}>
@@ -1593,6 +1608,16 @@ function Lobby() {
   if (loading) return <Shell><Loading /></Shell>;
   const players = room?.players ?? [];
 
+  async function removePlayer(playerId: number) {
+    setActionError('');
+    try {
+      await gameApi.removeRoomPlayer(token, code, playerId);
+      reload();
+    } catch (err) {
+      setActionError(apiError(err));
+    }
+  }
+
   return (
     <Shell>
       <ErrorMessage message={error || actionError} />
@@ -1606,9 +1631,14 @@ function Lobby() {
         </div>
         <div className="grid gap-2">
           {players.map((player) => (
-            <div key={player.id} className="flex justify-between rounded-md border-2 border-ink bg-paper px-3 py-2 font-black">
-              <span>{player.name}</span>
-              {player.isHost ? <span>Anfitriao</span> : null}
+            <div key={player.id} className="flex items-center justify-between gap-3 rounded-md border-2 border-ink bg-paper px-3 py-2 font-black">
+              <div className="min-w-0">
+                <span className="block truncate">{player.name}</span>
+                {player.isHost ? <span className="text-xs">Anfitriao</span> : null}
+              </div>
+              <Button type="button" variant="ghost" className="h-10 w-10 shrink-0 px-0" onClick={() => removePlayer(player.id)} aria-label={`Remover ${player.name}`}>
+                <Trash2 size={16} />
+              </Button>
             </div>
           ))}
         </div>

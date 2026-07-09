@@ -32,6 +32,15 @@ final class RoomController
         return JsonResponse::send($response, $this->service->addPlayer($args['code'], (array) $request->getParsedBody()), 201);
     }
 
+    public function removePlayer(Request $request, Response $response, array $args): Response
+    {
+        $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));
+        return JsonResponse::send(
+            $response,
+            $this->service->removePlayer($args['code'], (int) $args['id'], $account)
+        );
+    }
+
     public function start(Request $request, Response $response, array $args): Response
     {
         $account = $this->service->requirePlayerSession($request->getHeaderLine('Authorization'));

@@ -47,6 +47,18 @@ final class PlayerDAO
         return $stmt->fetch() ?: null;
     }
 
+    public function firstInRoom(int $roomId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT * FROM players
+             WHERE room_id = :room_id
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1'
+        );
+        $stmt->execute(['room_id' => $roomId]);
+        return $stmt->fetch() ?: null;
+    }
+
     public function upsertAccountPlayer(int $roomId, int $accountId, string $name): array
     {
         $existing = $this->findByAccountInRoom($roomId, $accountId);
@@ -104,6 +116,15 @@ final class PlayerDAO
     {
         $stmt = $this->db->prepare('UPDATE players SET score = score + 1 WHERE id = :id');
         $stmt->execute(['id' => $playerId]);
+    }
+
+    public function setHost(int $id, bool $isHost): void
+    {
+        $stmt = $this->db->prepare('UPDATE players SET is_host = :is_host WHERE id = :id');
+        $stmt->execute([
+            'id' => $id,
+            'is_host' => $isHost ? 1 : 0,
+        ]);
     }
 
     public function delete(int $id): void

@@ -28,6 +28,7 @@ final class Routes
         $app->post('/rooms', fn ($request, $response, $args) => (new RoomController($service()))->create($request, $response));
         $app->get('/rooms/{code}', fn ($request, $response, $args) => (new RoomController($service()))->show($request, $response, $args));
         $app->post('/rooms/{code}/players', fn ($request, $response, $args) => (new RoomController($service()))->addPlayer($request, $response, $args));
+        $app->delete('/rooms/{code}/players/{id}', fn ($request, $response, $args) => (new RoomController($service()))->removePlayer($request, $response, $args));
         $app->post('/rooms/{code}/start', fn ($request, $response, $args) => (new RoomController($service()))->start($request, $response, $args));
         $app->post('/rooms/{code}/rounds', fn ($request, $response, $args) => (new RoomController($service()))->createRound($request, $response, $args));
         $app->get('/rooms/{code}/ranking', fn ($request, $response, $args) => (new RoomController($service()))->ranking($request, $response, $args));

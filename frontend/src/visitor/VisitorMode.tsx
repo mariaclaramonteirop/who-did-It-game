@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, Copy, Plus, Users } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Plus, Trash2, Users } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, Card, ErrorMessage, Field, Input, Select } from '../components/ui';
 import { Ranking } from '../components/Ranking';
@@ -14,6 +14,7 @@ type VisitorRound = {
   roundNumber: number;
   question: { id: number; text: string; category: string; level: string };
   votes: Array<{ voterId: number; votedId: number }>;
+  voteDeadlineAt?: string | null;
   results?: Array<{ playerId: number; name: string; votesReceived: number; score: number }>;
   winners?: Array<{ playerId: number; name: string; votesReceived: number }>;
 };
@@ -24,6 +25,8 @@ type VisitorSession = {
   createdAt: string;
   maxPlayers: number;
   maxScore: number;
+  voteTimeEnabled: boolean;
+  voteTimeSeconds: number;
   categoryFilter: string[];
   players: VisitorPlayer[];
   phase: VisitorPhase;
@@ -56,6 +59,8 @@ function loadSession(): VisitorSession | null {
       createdAt: parsed.createdAt ?? new Date().toISOString(),
       maxPlayers: parsed.maxPlayers ?? 6,
       maxScore: parsed.maxScore ?? 5,
+      voteTimeEnabled: parsed.voteTimeEnabled ?? false,
+      voteTimeSeconds: parsed.voteTimeSeconds ?? 30,
       categoryFilter: parsed.categoryFilter ?? [],
       players: parsed.players ?? [],
       phase: parsed.phase ?? 'setup',
@@ -79,6 +84,8 @@ function loadSessionByCode(code: string): VisitorSession | null {
       createdAt: parsed.createdAt ?? new Date().toISOString(),
       maxPlayers: parsed.maxPlayers ?? 6,
       maxScore: parsed.maxScore ?? 5,
+      voteTimeEnabled: parsed.voteTimeEnabled ?? false,
+      voteTimeSeconds: parsed.voteTimeSeconds ?? 30,
       categoryFilter: parsed.categoryFilter ?? [],
       players: parsed.players ?? [],
       phase: parsed.phase ?? 'setup',
@@ -127,6 +134,8 @@ export function VisitorMode() {
     name: 'Mesa dos visitantes',
     maxPlayers: 6,
     maxScore: 5,
+    voteTimeEnabled: false,
+    voteTimeSeconds: 30,
     categoryFilter: [] as string[],
   });
   const [playerName, setPlayerName] = useState('');
@@ -171,6 +180,14 @@ export function VisitorMode() {
     };
   }
 
+  function voteDeadlineForSession() {
+    const enabled = session?.voteTimeEnabled ?? roomForm.voteTimeEnabled;
+    const secondsSource = session?.voteTimeSeconds ?? roomForm.voteTimeSeconds;
+    if (!enabled) return null;
+    const seconds = Math.max(10, Math.min(60, secondsSource));
+    return new Date(Date.now() + seconds * 1000).toISOString();
+  }
+
   function createSession(event: FormEvent) {
     event.preventDefault();
     setError('');
@@ -181,6 +198,8 @@ export function VisitorMode() {
       createdAt: new Date().toISOString(),
       maxPlayers: Math.max(3, Math.min(20, roomForm.maxPlayers)),
       maxScore: Math.max(1, Math.min(30, roomForm.maxScore)),
+      voteTimeEnabled: roomForm.voteTimeEnabled,
+      voteTimeSeconds: roomForm.voteTimeEnabled ? Math.max(10, Math.min(60, roomForm.voteTimeSeconds)) : 30,
       categoryFilter: roomForm.categoryFilter,
       players: [],
       phase: 'setup',
@@ -262,40 +281,34 @@ export function VisitorMode() {
     setError('');
   }
 
-  function startGame() {
+  function removePlayer(playerId: number) {
     if (!session) return;
-    if (session.players.length < 3) {
-      setError('Adicione pelo menos 3 jogadores.');
-      return;
-    }
-    const question = pickQuestion(session.usedQuestionIds, session.categoryFilter);
-    if (!question) {
-      setError('Nao ha perguntas disponiveis para esta configuracao.');
-      return;
-    }
-    persist({
+    const nextSession = {
       ...session,
-      phase: 'playing',
-      roundNumber: session.roundNumber + 1,
-      usedQuestionIds: [...session.usedQuestionIds, question.id],
-      round: {
-        roundNumber: session.roundNumber + 1,
-        question,
-        votes: [],
-      },
-    });
+      players: session.players.filter((player) => player.id !== playerId),
+    };
+    if (nextSession.players.length < 3 && nextSession.phase === 'setup') {
+      nextSession.phase = 'setup';
+    }
+    persist(nextSession);
+    setError('');
   }
 
-  function submitVote() {
-    if (!session?.round) return;
+  function resolveVote(votedId: number | null = null) {
+    if (!session) return;
+    if (!session.round) return;
     const voter = session.players[session.round.votes.length];
-    if (!voter || selected === null) return;
+    if (!voter) return;
 
-    const votes = [...session.round.votes, { voterId: voter.id, votedId: selected }];
+    const votes = [...session.round.votes, { voterId: voter.id, votedId: votedId ?? 0 }];
     if (votes.length < session.players.length) {
       persist({
         ...session,
-        round: { ...session.round, votes },
+        round: {
+          ...session.round,
+          votes,
+          voteDeadlineAt: voteDeadlineForSession(),
+        },
       });
       setSelected(null);
       return;
@@ -333,6 +346,31 @@ export function VisitorMode() {
     setSelected(null);
   }
 
+  function startGame() {
+    if (!session) return;
+    if (session.players.length < 3) {
+      setError('Adicione pelo menos 3 jogadores.');
+      return;
+    }
+    const question = pickQuestion(session.usedQuestionIds, session.categoryFilter);
+    if (!question) {
+      setError('Nao ha perguntas disponiveis para esta configuracao.');
+      return;
+    }
+    persist({
+      ...session,
+      phase: 'playing',
+      roundNumber: session.roundNumber + 1,
+      usedQuestionIds: [...session.usedQuestionIds, question.id],
+      round: {
+        roundNumber: session.roundNumber + 1,
+        question,
+        votes: [],
+        voteDeadlineAt: voteDeadlineForSession(),
+      },
+    });
+  }
+
   function nextRound() {
     if (!session) return;
     const hasWinner = session.players.some((player) => player.score >= session.maxScore);
@@ -355,15 +393,25 @@ export function VisitorMode() {
         roundNumber: session.roundNumber + 1,
         question,
         votes: [],
+        voteDeadlineAt: voteDeadlineForSession(),
       },
     });
   }
 
   const voter = session?.round ? session.players[session.round.votes.length] : undefined;
+  const secondsLeft = session?.round?.voteDeadlineAt ? Math.max(0, Math.ceil((Date.parse(session.round.voteDeadlineAt) - Date.now()) / 1000)) : null;
   const options = useMemo(() => {
     if (!session?.round || !voter) return [];
     return session.players.filter((player) => player.id !== voter.id);
   }, [session, voter]);
+
+  useEffect(() => {
+    if (!session?.round?.voteDeadlineAt || session.phase !== 'playing') return undefined;
+    const deadline = Date.parse(session.round.voteDeadlineAt);
+    if (Number.isNaN(deadline)) return undefined;
+    const timeout = window.setTimeout(() => resolveVote(0), Math.max(0, deadline - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [session?.round?.voteDeadlineAt, session?.phase, session?.round?.votes.length]);
 
   if (!session) {
     return (
@@ -429,8 +477,29 @@ export function VisitorMode() {
                 <Field label="Jogadores">
                   <Input type="number" min={3} max={20} value={roomForm.maxPlayers} onChange={(event) => setRoomForm({ ...roomForm, maxPlayers: Number(event.target.value) })} />
                 </Field>
-                <Field label="Pontos para vencer">
+              <Field label="Pontos para vencer">
                   <Input type="number" min={1} max={30} value={roomForm.maxScore} onChange={(event) => setRoomForm({ ...roomForm, maxScore: Number(event.target.value) })} />
+                </Field>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_160px]">
+                <label className="flex items-center gap-3 rounded-md border-2 border-ink bg-paper px-3 py-3 font-black">
+                  <input
+                    type="checkbox"
+                    checked={roomForm.voteTimeEnabled}
+                    onChange={(event) => setRoomForm({ ...roomForm, voteTimeEnabled: event.target.checked })}
+                    className="h-5 w-5 accent-black"
+                  />
+                  Tempo de voto
+                </label>
+                <Field label="Max. segundos">
+                  <Input
+                    type="number"
+                    min={10}
+                    max={60}
+                    disabled={!roomForm.voteTimeEnabled}
+                    value={roomForm.voteTimeSeconds}
+                    onChange={(event) => setRoomForm({ ...roomForm, voteTimeSeconds: Number(event.target.value) })}
+                  />
                 </Field>
               </div>
               <Field label="Categorias">
@@ -516,7 +585,12 @@ export function VisitorMode() {
             </form>
             <div className="grid gap-2">
               {session.players.map((player) => (
-                <div key={player.id} className="rounded-md border-2 border-ink bg-white px-3 py-2 font-black">{player.name}</div>
+                <div key={player.id} className="flex items-center justify-between gap-3 rounded-md border-2 border-ink bg-white px-3 py-2 font-black">
+                  <span className="min-w-0 truncate">{player.name}</span>
+                  <Button type="button" variant="ghost" className="flex h-10 w-10 shrink-0 items-center justify-center px-0" onClick={() => removePlayer(player.id)} aria-label={`Remover ${player.name}`}>
+                    <Trash2 size={16} className="shrink-0" />
+                  </Button>
+                </div>
               ))}
             </div>
             <Button disabled={session.players.length < 3} onClick={startGame}>
@@ -530,6 +604,11 @@ export function VisitorMode() {
             <div className="rounded-md border-2 border-ink bg-gold p-3 font-black">
               Vez de {voter?.name ?? 'jogador'}
             </div>
+            {secondsLeft !== null ? (
+              <div className="rounded-md border-2 border-ink bg-teal px-3 py-2 font-black text-white">
+                Tempo restante: {secondsLeft}s
+              </div>
+            ) : null}
             <h2 className="text-2xl font-black leading-tight">{session.round.question.text}</h2>
             <div className="grid gap-2">
               {options.map((player) => (
@@ -543,7 +622,7 @@ export function VisitorMode() {
                 </button>
               ))}
             </div>
-            <Button disabled={selected === null} onClick={submitVote}>
+            <Button disabled={selected === null} onClick={() => resolveVote(selected)}>
               <Check className="mr-2 inline" size={18} /> Confirmar voto
             </Button>
           </div>

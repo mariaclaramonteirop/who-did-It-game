@@ -242,6 +242,41 @@ final class GameService
         return $this->formatPlayer($player);
     }
 
+    public function removePlayer(string $code, int $playerId, ?array $account = null): array
+    {
+        $room = $this->requireRoom($code);
+        if ($room['status'] === Room::IN_PROGRESS || $room['status'] === Room::FINISHED) {
+            throw new HttpException(409, 'Nao e possivel remover jogadores com a partida em andamento.');
+        }
+        if ($account !== null) {
+            $this->ensureAccountInRoom((int) $room['id'], $account);
+        }
+
+        $player = $this->players->findInRoom($playerId, (int) $room['id']);
+        if ($player === null) {
+            throw new HttpException(404, 'Jogador nao encontrado nesta sala.');
+        }
+        if ($account !== null && (int) ($player['account_id'] ?? 0) === (int) $account['id']) {
+            throw new HttpException(409, 'Nao e possivel remover o proprio usuario logado.');
+        }
+
+        $wasHost = (bool) $player['is_host'];
+        $this->players->delete($playerId);
+
+        $remaining = $this->players->listByRoom((int) $room['id']);
+        if ($wasHost && $remaining !== []) {
+            $nextHost = $this->players->firstInRoom((int) $room['id']);
+            if ($nextHost !== null) {
+                $this->players->setHost((int) $nextHost['id'], true);
+            }
+        }
+        if (count($remaining) < 3 && $room['status'] === Room::READY) {
+            $this->rooms->updateStatus((int) $room['id'], Room::WAITING_PLAYERS);
+        }
+
+        return $this->getRoom($code);
+    }
+
     public function startRoom(string $code, ?array $account = null): array
     {
         $room = $this->requireRoom($code);
