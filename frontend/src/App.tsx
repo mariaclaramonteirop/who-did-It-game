@@ -1,6 +1,6 @@
 ﻿import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Coffee, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, Coffee, Crown, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, ShieldCheck, Users, UserRound } from 'lucide-react';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
@@ -76,22 +76,129 @@ function Home() {
             </form>
           </Card>
         </div>
-        <Card className="grid gap-4">
-          <h2 className="text-2xl font-black">Ajuda</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+        <div className="pt-1">
+          <Link to="/help" className="inline-flex items-center gap-2 text-sm font-black uppercase tracking-wide text-ink underline decoration-2 underline-offset-4">
+            <BookOpen size={16} />
+            Ajuda e regras
+          </Link>
+        </div>
+      </section>
+    </Shell>
+  );
+}
+
+function HelpPage() {
+  const navigate = useNavigate();
+
+  return (
+    <Shell>
+      <section className="grid gap-4">
+        <div className="grid gap-4 rounded-lg border-2 border-ink bg-gold p-5 shadow-crisp">
+          <div className="flex flex-wrap items-center gap-4">
+            <img src="/logo.png" alt="Quem fez isso?" className="h-24 w-24 shrink-0 rounded-md border-2 border-ink bg-white object-contain" />
             <div className="grid gap-2">
-              <h3 className="text-lg font-black">Manual</h3>
-              <p className="text-sm font-bold">Crie a sala, escolha o tempo de voto e adicione os jogadores antes de iniciar a partida.</p>
-              <p className="text-sm font-bold">Se entrar numa sala existente, use o código da sala na tela inicial.</p>
-            </div>
-            <div className="grid gap-2">
-              <h3 className="text-lg font-black">Regras</h3>
-              <p className="text-sm font-bold">Cada jogador vota uma vez por rodada.</p>
-              <p className="text-sm font-bold">Se o tempo acabar sem voto, a vez é pulada e o voto fica em branco.</p>
-              <p className="text-sm font-bold">A partida termina quando alguém atinge a pontuação máxima da sala.</p>
+              <p className="text-sm font-black uppercase tracking-wide text-zinc-700">Guia do jogo</p>
+              <h1 className="text-4xl font-black leading-none sm:text-5xl">Ajuda, regras e funções</h1>
+              <p className="max-w-2xl text-lg font-bold">Tudo o que você precisa para jogar, criar sala e controlar a rodada sem sair da tela.</p>
             </div>
           </div>
-        </Card>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border-2 border-ink bg-white p-3">
+              <p className="text-xs font-black uppercase tracking-wide text-zinc-600">Passo 1</p>
+              <p className="mt-1 text-sm font-bold">Crie a sala e ajuste regras, categorias e tempo.</p>
+            </div>
+            <div className="rounded-md border-2 border-ink bg-teal p-3 text-white">
+              <p className="text-xs font-black uppercase tracking-wide opacity-90">Passo 2</p>
+              <p className="mt-1 text-sm font-bold">Os jogadores entram, acompanham a vez e votam.</p>
+            </div>
+            <div className="rounded-md border-2 border-ink bg-tomato p-3 text-white">
+              <p className="text-xs font-black uppercase tracking-wide opacity-90">Passo 3</p>
+              <p className="mt-1 text-sm font-bold">Veja o resultado, o ranking e siga para a próxima rodada.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="grid gap-4 bg-white">
+            <div className="flex items-center gap-3">
+              <BookOpen className="text-tomato" size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Manual</h2>
+                <p className="text-sm font-bold text-zinc-600">Fluxo básico de uso.</p>
+              </div>
+            </div>
+            <ol className="grid gap-3">
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">1. Crie a sala e configure nome, pontos, categorias e tempo de voto.</li>
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">2. Adicione os jogadores e comece a partida no momento certo.</li>
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">3. Em cada rodada, a pergunta aparece e os jogadores votam no culpado.</li>
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">4. Veja o resultado e siga para a próxima rodada ou final da partida.</li>
+            </ol>
+          </Card>
+
+          <Card className="grid gap-4 bg-white">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="text-teal" size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Regras</h2>
+                <p className="text-sm font-bold text-zinc-600">O que o jogo espera de cada rodada.</p>
+              </div>
+            </div>
+            <div className="grid gap-3">
+              <div className="rounded-md border-2 border-ink bg-tomato p-3 text-white">
+                Se o tempo de voto acabar, a vez é pulada e o voto fica vazio.
+              </div>
+              <div className="rounded-md border-2 border-ink bg-gold p-3 font-bold">
+                Cada jogador pode votar uma vez por rodada. Ninguém vota em si mesmo.
+              </div>
+              <div className="rounded-md border-2 border-ink bg-paper p-3 font-bold">
+                A partida termina quando alguém alcança a pontuação máxima da sala.
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="grid gap-4 bg-teal text-white">
+            <div className="flex items-center gap-3">
+              <UserRound size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Opções do jogador</h2>
+                <p className="text-sm font-bold opacity-90">O que aparece para quem está jogando.</p>
+              </div>
+            </div>
+            <ul className="grid gap-2 text-sm font-bold">
+              <li>Entrar na sala pelo código.</li>
+              <li>Ver sua vez na rodada atual.</li>
+              <li>Escolher um suspeito para votar.</li>
+              <li>Acompanhar o placar e o resultado.</li>
+            </ul>
+          </Card>
+
+          <Card className="grid gap-4 bg-paper">
+            <div className="flex items-center gap-3">
+              <Crown className="text-tomato" size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Opções do anfitrião</h2>
+                <p className="text-sm font-bold text-zinc-600">Controle da sala e da rodada.</p>
+              </div>
+            </div>
+            <ul className="grid gap-2 text-sm font-bold">
+              <li>Criar a sala e escolher o tempo de voto.</li>
+              <li>Filtrar perguntas por categoria.</li>
+              <li>Adicionar jogadores antes de iniciar.</li>
+              <li>Gerenciar a partida até o fim.</li>
+            </ul>
+          </Card>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => navigate(-1)}>
+            <ArrowLeft className="mr-2 inline" size={18} /> Voltar
+          </Button>
+          <Button variant="secondary" onClick={() => navigate('/')}>
+            <Users className="mr-2 inline" size={18} /> Ir para a home
+          </Button>
+        </div>
       </section>
     </Shell>
   );
@@ -1397,6 +1504,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/help" element={<HelpPage />} />
       <Route path="/create-room" element={<CreateRoom />} />
       <Route path="/room/:code/setup-players" element={<SetupPlayers />} />
       <Route path="/room/:code/lobby" element={<Lobby />} />
