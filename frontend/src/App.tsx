@@ -214,7 +214,7 @@ function CreateRoom() {
     voteVisibility: 'anonymous',
     voteTimeEnabled: false,
     voteTimeSeconds: 30,
-    categoryFilter: [] as string[],
+    categoryFilter: 'all',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -270,12 +270,8 @@ function CreateRoom() {
               </Select>
             </Field>
             <Field label="Categoria">
-              <Select
-                multiple
-                value={form.categoryFilter}
-                onChange={(e) => setForm({ ...form, categoryFilter: Array.from(e.target.selectedOptions).map((option) => option.value) })}
-                className="min-h-32"
-              >
+              <Select value={form.categoryFilter} onChange={(e) => setForm({ ...form, categoryFilter: e.target.value })}>
+                <option value="all">Todas</option>
                 {categories.filter((category) => category.isActive).map((category) => (
                   <option key={category.id} value={category.slug}>{category.name}</option>
                 ))}
@@ -296,14 +292,14 @@ function CreateRoom() {
               <Input
                 type="number"
                 min={10}
-                max={300}
+                max={60}
                 disabled={!form.voteTimeEnabled}
                 value={form.voteTimeSeconds}
                 onChange={(e) => setForm({ ...form, voteTimeSeconds: Number(e.target.value) })}
               />
             </Field>
           </div>
-          <p className="text-sm font-bold">Sem seleção, a sala usa todas as categorias.</p>
+          <p className="text-sm font-bold">Sem seleção específica, a sala usa todas as categorias.</p>
           <p className="text-sm font-bold">Se o tempo acabar sem voto, a vez pula e conta como voto vazio.</p>
           <Button disabled={loading}>{loading ? 'Criando...' : 'Criar sala'}</Button>
         </form>

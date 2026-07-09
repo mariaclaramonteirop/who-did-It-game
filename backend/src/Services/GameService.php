@@ -20,6 +20,9 @@ use Throwable;
 final class GameService
 {
     private const ADMIN_PERMISSIONS = ['questions', 'categories', 'rooms', 'players', 'admins'];
+    private const VOTE_TIME_DEFAULT_SECONDS = 30;
+    private const VOTE_TIME_MIN_SECONDS = 10;
+    private const VOTE_TIME_MAX_SECONDS = 60;
 
     private AdminUserDAO $adminUsers;
     private RoomDAO $rooms;
@@ -65,9 +68,9 @@ final class GameService
         }
 
         $voteTimeEnabled = (bool) ($payload['voteTimeEnabled'] ?? false);
-        $voteTimeSeconds = $voteTimeEnabled ? (int) ($payload['voteTimeSeconds'] ?? 30) : null;
-        if ($voteTimeEnabled && ($voteTimeSeconds < 10 || $voteTimeSeconds > 300)) {
-            throw new HttpException(422, 'O tempo de voto deve ficar entre 10 e 300 segundos.');
+        $voteTimeSeconds = $voteTimeEnabled ? (int) ($payload['voteTimeSeconds'] ?? self::VOTE_TIME_DEFAULT_SECONDS) : null;
+        if ($voteTimeEnabled && ($voteTimeSeconds < self::VOTE_TIME_MIN_SECONDS || $voteTimeSeconds > self::VOTE_TIME_MAX_SECONDS)) {
+            throw new HttpException(422, 'O tempo de voto deve ficar entre 10 e 60 segundos.');
         }
 
         $data = [
@@ -984,12 +987,13 @@ final class GameService
     private function formatRound(array $round): array
     {
         $players = $this->players->listByRoom((int) $round['room_id']);
+        $deadline = $round['vote_deadline_at'] ?? null;
         return [
             'roundId' => (int) $round['id'],
             'roundNumber' => (int) $round['round_number'],
             'status' => $round['status'],
-            'voteDeadlineAt' => $round['vote_deadline_at'] ?? null,
-            'voteTimeEnabled' => ($round['vote_deadline_at'] ?? null) !== null,
+            'voteDeadlineAt' => $deadline !== null ? gmdate(DATE_ATOM, strtotime((string) $deadline)) : null,
+            'voteTimeEnabled' => $deadline !== null,
             'question' => [
                 'id' => (int) $round['question_id'],
                 'text' => $round['question_text'],
