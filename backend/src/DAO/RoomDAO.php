@@ -12,11 +12,25 @@ final class RoomDAO
     {
     }
 
+    public function ensureSchema(): void
+    {
+        $this->addColumnIfMissing(
+            'rooms',
+            'vote_time_enabled',
+            "ALTER TABLE rooms ADD COLUMN vote_time_enabled BOOLEAN NOT NULL DEFAULT FALSE AFTER vote_visibility"
+        );
+        $this->addColumnIfMissing(
+            'rooms',
+            'vote_time_seconds',
+            "ALTER TABLE rooms ADD COLUMN vote_time_seconds INT NULL AFTER vote_time_enabled"
+        );
+    }
+
     public function create(array $data, string $code): array
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO rooms (code, name, max_players, max_score, game_mode, vote_visibility, category_filter)
-             VALUES (:code, :name, :max_players, :max_score, :game_mode, :vote_visibility, :category_filter)'
+            'INSERT INTO rooms (code, name, max_players, max_score, game_mode, vote_visibility, vote_time_enabled, vote_time_seconds, category_filter)
+             VALUES (:code, :name, :max_players, :max_score, :game_mode, :vote_visibility, :vote_time_enabled, :vote_time_seconds, :category_filter)'
         );
         $stmt->execute([
             'code' => $code,
@@ -25,6 +39,8 @@ final class RoomDAO
             'max_score' => $data['maxScore'],
             'game_mode' => $data['gameMode'],
             'vote_visibility' => $data['voteVisibility'],
+            'vote_time_enabled' => $data['voteTimeEnabled'] ? 1 : 0,
+            'vote_time_seconds' => $data['voteTimeSeconds'],
             'category_filter' => $data['categoryFilter'],
         ]);
 
@@ -96,5 +112,31 @@ final class RoomDAO
     {
         $stmt = $this->db->prepare('DELETE FROM rooms WHERE id = :id');
         $stmt->execute(['id' => $id]);
+    }
+
+    private function addColumnIfMissing(string $table, string $column, string $sql): void
+    {
+        if ($this->columnExists($table, $column)) {
+            return;
+        }
+
+        $this->db->exec($sql);
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = :table_name
+               AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            'table_name' => $table,
+            'column_name' => $column,
+        ]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 }

@@ -21,6 +21,9 @@ use Throwable;
 final class GameService
 {
     private const ADMIN_PERMISSIONS = ['questions', 'categories', 'rooms', 'players', 'admins'];
+    private const VOTE_TIME_DEFAULT_SECONDS = 30;
+    private const VOTE_TIME_MIN_SECONDS = 10;
+    private const VOTE_TIME_MAX_SECONDS = 60;
 
     private AdminUserDAO $adminUsers;
     private PlayerAccountDAO $playerAccounts;
@@ -41,12 +44,15 @@ final class GameService
         $this->playerAccounts = new PlayerAccountDAO($db);
         $this->playerAccounts->ensureSchema();
         $this->rooms = new RoomDAO($db);
+        $this->rooms->ensureSchema();
         $this->players = new PlayerDAO($db);
         $this->categories = new CategoryDAO($db);
         $this->categories->ensureSchema();
         $this->questions = new QuestionDAO($db);
         $this->rounds = new RoundDAO($db);
+        $this->rounds->ensureSchema();
         $this->votes = new VoteDAO($db);
+        $this->votes->ensureSchema();
     }
 
     public function createRoom(array $payload, ?array $account = null): array
@@ -65,12 +71,20 @@ final class GameService
             throw new HttpException(422, 'A pontuacao final deve ficar entre 1 e 30.');
         }
 
+        $voteTimeEnabled = (bool) ($payload['voteTimeEnabled'] ?? false);
+        $voteTimeSeconds = $voteTimeEnabled ? (int) ($payload['voteTimeSeconds'] ?? self::VOTE_TIME_DEFAULT_SECONDS) : null;
+        if ($voteTimeEnabled && ($voteTimeSeconds < self::VOTE_TIME_MIN_SECONDS || $voteTimeSeconds > self::VOTE_TIME_MAX_SECONDS)) {
+            throw new HttpException(422, 'O tempo de voto deve ficar entre 10 e 60 segundos.');
+        }
+
         $data = [
             'name' => $name,
             'maxPlayers' => $maxPlayers,
             'maxScore' => $maxScore,
             'gameMode' => $payload['gameMode'] ?? 'classic',
             'voteVisibility' => $payload['voteVisibility'] ?? 'anonymous',
+            'voteTimeEnabled' => $voteTimeEnabled,
+            'voteTimeSeconds' => $voteTimeEnabled ? $voteTimeSeconds : null,
             'categoryFilter' => $this->normalizeCategoryFilter($payload['categoryFilter'] ?? 'all'),
         ];
 
@@ -257,10 +271,13 @@ final class GameService
             throw new HttpException(409, 'Nao ha perguntas disponiveis para esta sala.');
         }
 
+        $voteDeadlineAt = $this->voteDeadlineForRoom($room);
+
         $round = $this->rounds->create(
             (int) $room['id'],
             (int) $question['id'],
-            $this->rounds->nextNumber((int) $room['id'])
+            $this->rounds->nextNumber((int) $room['id']),
+            $voteDeadlineAt
         );
 
         return $this->formatRound($this->rounds->find((int) $round['id']));
@@ -268,6 +285,7 @@ final class GameService
 
     public function getRound(int $roundId, ?array $account = null): array
     {
+        $this->finalizeExpiredRound($roundId);
         if ($account !== null) {
             $room = $this->roomById((int) $this->requireRound($roundId)['room_id']);
             $this->ensureAccountInRoom((int) $room['id'], $account);
@@ -277,6 +295,7 @@ final class GameService
 
     public function registerVote(int $roundId, array $payload): array
     {
+        $this->finalizeExpiredRound($roundId);
         $round = $this->requireRound($roundId);
         if ($round['status'] !== Round::WAITING_VOTES) {
             throw new HttpException(409, 'Esta rodada nao esta recebendo votos.');
@@ -284,24 +303,31 @@ final class GameService
 
         $voterId = (int) ($payload['voterPlayerId'] ?? 0);
         $votedId = (int) ($payload['votedPlayerId'] ?? 0);
-        if ($voterId <= 0 || $votedId <= 0) {
+        if ($voterId <= 0) {
             throw new HttpException(422, 'Informe o jogador votante e o jogador votado.');
         }
-        if ($voterId === $votedId) {
+        if ($votedId > 0 && $voterId === $votedId) {
             throw new HttpException(422, 'Um jogador nao pode votar em si mesmo.');
         }
-        if (!$this->players->findInRoom($voterId, (int) $round['room_id']) || !$this->players->findInRoom($votedId, (int) $round['room_id'])) {
+        if (!$this->players->findInRoom($voterId, (int) $round['room_id'])) {
+            throw new HttpException(422, 'Os jogadores precisam pertencer a mesma sala da rodada.');
+        }
+        if ($votedId > 0 && !$this->players->findInRoom($votedId, (int) $round['room_id'])) {
             throw new HttpException(422, 'Os jogadores precisam pertencer a mesma sala da rodada.');
         }
 
         try {
-            $this->votes->create($roundId, $voterId, $votedId);
+            $this->votes->create($roundId, $voterId, $votedId > 0 ? $votedId : null);
         } catch (Throwable) {
             throw new HttpException(409, 'Este jogador ja votou nesta rodada.');
         }
 
         $votesReceived = $this->votes->countByRound($roundId);
         $totalPlayers = $this->players->countByRoom((int) $round['room_id']);
+        if ($votesReceived < $totalPlayers) {
+            $room = $this->roomById((int) $round['room_id']);
+            $this->rounds->updateVoteDeadline($roundId, $this->voteDeadlineForRoom($room));
+        }
 
         return [
             'message' => 'Voto registrado.',
@@ -313,6 +339,7 @@ final class GameService
 
     public function getRoundResult(int $roundId, ?array $account = null): array
     {
+        $this->finalizeExpiredRound($roundId);
         $round = $this->requireRound($roundId);
         if ($account !== null) {
             $this->ensureAccountInRoom((int) $round['room_id'], $account);
@@ -744,7 +771,7 @@ final class GameService
         try {
             $results = $this->votes->resultsByRound($roundId);
             $maxVotes = max(array_map(fn (array $row) => (int) $row['votes_received'], $results));
-            $winners = array_filter($results, fn (array $row) => (int) $row['votes_received'] === $maxVotes);
+            $winners = $maxVotes > 0 ? array_filter($results, fn (array $row) => (int) $row['votes_received'] === $maxVotes) : [];
 
             foreach ($winners as $winner) {
                 $this->players->addPoint((int) $winner['player_id']);
@@ -826,6 +853,8 @@ final class GameService
             'maxScore' => (int) $room['max_score'],
             'gameMode' => $room['game_mode'],
             'voteVisibility' => $room['vote_visibility'],
+            'voteTimeEnabled' => (bool) ($room['vote_time_enabled'] ?? false),
+            'voteTimeSeconds' => isset($room['vote_time_seconds']) ? (int) $room['vote_time_seconds'] : null,
             'categoryFilter' => $room['category_filter'],
         ];
     }
@@ -1159,10 +1188,13 @@ final class GameService
     private function formatRound(array $round): array
     {
         $players = $this->players->listByRoom((int) $round['room_id']);
+        $deadline = $round['vote_deadline_at'] ?? null;
         return [
             'roundId' => (int) $round['id'],
             'roundNumber' => (int) $round['round_number'],
             'status' => $round['status'],
+            'voteDeadlineAt' => $deadline !== null ? gmdate(DATE_ATOM, strtotime((string) $deadline)) : null,
+            'voteTimeEnabled' => $deadline !== null,
             'question' => [
                 'id' => (int) $round['question_id'],
                 'text' => $round['question_text'],
@@ -1177,5 +1209,53 @@ final class GameService
             'votesReceived' => $this->votes->countByRound((int) $round['id']),
             'totalPlayers' => count($players),
         ];
+    }
+
+    private function voteDeadlineForRoom(array $room): ?string
+    {
+        if (!(bool) ($room['vote_time_enabled'] ?? false)) {
+            return null;
+        }
+
+        $seconds = (int) ($room['vote_time_seconds'] ?? 0);
+        if ($seconds <= 0) {
+            return null;
+        }
+
+        return date('Y-m-d H:i:s', time() + $seconds);
+    }
+
+    private function finalizeExpiredRound(int $roundId): void
+    {
+        $round = $this->rounds->find($roundId);
+        if ($round === null || $round['status'] !== Round::WAITING_VOTES) {
+            return;
+        }
+
+        $deadline = $round['vote_deadline_at'] ?? null;
+        if ($deadline === null || strtotime((string) $deadline) > time()) {
+            return;
+        }
+
+        $roomPlayers = $this->players->listByRoom((int) $round['room_id']);
+        $votedPlayerIds = $this->votes->votedPlayerIdsByRound($roundId);
+        foreach ($roomPlayers as $player) {
+            if (in_array((int) $player['id'], $votedPlayerIds, true)) {
+                continue;
+            }
+
+            $this->votes->create($roundId, (int) $player['id'], null);
+            break;
+        }
+
+        $votesReceived = $this->votes->countByRound($roundId);
+        $totalPlayers = count($roomPlayers);
+        if ($votesReceived >= $totalPlayers) {
+            $this->closeRound($round, $roundId);
+            return;
+        }
+
+        $room = $this->roomById((int) $round['room_id']);
+        $this->rounds->updateVoteDeadline($roundId, $this->voteDeadlineForRoom($room));
     }
 }

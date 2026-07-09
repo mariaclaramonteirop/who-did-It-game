@@ -12,7 +12,12 @@ final class VoteDAO
     {
     }
 
-    public function create(int $roundId, int $voterId, int $votedId): void
+    public function ensureSchema(): void
+    {
+        $this->db->exec('ALTER TABLE votes MODIFY voted_player_id INT NULL');
+    }
+
+    public function create(int $roundId, int $voterId, ?int $votedId): void
     {
         $stmt = $this->db->prepare(
             'INSERT INTO votes (round_id, voter_player_id, voted_player_id)
@@ -62,5 +67,12 @@ final class VoteDAO
         );
         $stmt->execute(['round_id' => $roundId]);
         return $stmt->fetchAll();
+    }
+
+    public function votedPlayerIdsByRound(int $roundId): array
+    {
+        $stmt = $this->db->prepare('SELECT voter_player_id FROM votes WHERE round_id = :round_id');
+        $stmt->execute(['round_id' => $roundId]);
+        return array_map(fn (array $row) => (int) $row['voter_player_id'], $stmt->fetchAll());
     }
 }

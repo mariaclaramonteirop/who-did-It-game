@@ -14,6 +14,8 @@ export type Room = {
   maxScore: number;
   gameMode: string;
   voteVisibility: string;
+  voteTimeEnabled?: boolean;
+  voteTimeSeconds?: number | null;
   categoryFilter: string;
   players?: Player[];
 };
@@ -22,6 +24,8 @@ export type Round = {
   roundId: number;
   roundNumber: number;
   status: 'waiting_votes' | 'finished';
+  voteDeadlineAt?: string | null;
+  voteTimeEnabled?: boolean;
   question: {
     id: number;
     text: string;

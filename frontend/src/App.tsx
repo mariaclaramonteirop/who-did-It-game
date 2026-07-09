@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, Coffee, Crown, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, ShieldCheck, Users, UserRound } from 'lucide-react';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
@@ -44,15 +44,34 @@ function RequirePlayerSession({ children }: { children: ReactNode }) {
 }
 
 function Shell({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const showBack = location.pathname !== '/';
+
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-3xl content-start gap-5 px-4 py-5 sm:py-8">
       <header className="flex items-center justify-between gap-3">
-        <Link to="/" aria-label="Quem fez isso?" className="inline-flex items-center gap-3">
-          <img src="/logo.png" alt="" className="h-12 w-auto" />
-        </Link>
+        <div className="flex min-w-0 items-center gap-3">
+          {showBack ? (
+            <Button type="button" variant="ghost" className="h-11 w-11 shrink-0 px-0" onClick={() => navigate(-1)}>
+              <ArrowLeft size={18} />
+            </Button>
+          ) : null}
+          <Link to="/" className="flex min-w-0 items-center gap-3">
+            <img src="/logo.png" alt="Quem fez isso?" className="h-11 w-11 shrink-0 rounded-md border-2 border-ink bg-white object-contain" />
+            <div className="min-w-0">
+              <p className="truncate text-xl font-black text-ink sm:text-2xl">Quem fez isso?</p>
+              <p className="truncate text-xs font-black uppercase tracking-wide text-zinc-600">Who Did It?</p>
+            </div>
+          </Link>
+        </div>
         <div className="h-10 w-10 rounded-md border-2 border-ink bg-teal shadow-crisp" aria-hidden />
       </header>
       {children}
+      <footer className="mt-2 flex items-center gap-2 border-t-2 border-ink pt-3 text-xs font-bold text-zinc-600">
+        <Coffee size={14} className="text-zinc-500" />
+        <span>Desenvolvido por Maria Clara.</span>
+      </footer>
     </main>
   );
 }
@@ -120,6 +139,129 @@ function Home() {
               </Button>
             </Card>
           ) : null}
+        </div>
+        <div className="pt-1">
+          <Link to="/help" className="inline-flex items-center gap-2 text-sm font-black uppercase tracking-wide text-ink underline decoration-2 underline-offset-4">
+            <BookOpen size={16} />
+            Ajuda e regras
+          </Link>
+        </div>
+      </section>
+    </Shell>
+  );
+}
+
+function HelpPage() {
+  const navigate = useNavigate();
+
+  return (
+    <Shell>
+      <section className="grid gap-4">
+        <div className="grid gap-4 rounded-lg border-2 border-ink bg-gold p-5 shadow-crisp">
+          <div className="flex flex-wrap items-center gap-4">
+            <img src="/logo.png" alt="Quem fez isso?" className="h-24 w-24 shrink-0 rounded-md border-2 border-ink bg-white object-contain" />
+            <div className="grid gap-2">
+              <p className="text-sm font-black uppercase tracking-wide text-zinc-700">Guia do jogo</p>
+              <h1 className="text-4xl font-black leading-none sm:text-5xl">Ajuda, regras e funções</h1>
+              <p className="max-w-2xl text-lg font-bold">Tudo o que você precisa para jogar, criar sala e controlar a rodada sem sair da tela.</p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border-2 border-ink bg-white p-3">
+              <p className="text-xs font-black uppercase tracking-wide text-zinc-600">Passo 1</p>
+              <p className="mt-1 text-sm font-bold">Crie a sala e ajuste regras, categorias e tempo.</p>
+            </div>
+            <div className="rounded-md border-2 border-ink bg-teal p-3 text-white">
+              <p className="text-xs font-black uppercase tracking-wide opacity-90">Passo 2</p>
+              <p className="mt-1 text-sm font-bold">Os jogadores entram, acompanham a vez e votam.</p>
+            </div>
+            <div className="rounded-md border-2 border-ink bg-tomato p-3 text-white">
+              <p className="text-xs font-black uppercase tracking-wide opacity-90">Passo 3</p>
+              <p className="mt-1 text-sm font-bold">Veja o resultado, o ranking e siga para a próxima rodada.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="grid gap-4 bg-white">
+            <div className="flex items-center gap-3">
+              <BookOpen className="text-tomato" size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Manual</h2>
+                <p className="text-sm font-bold text-zinc-600">Fluxo básico de uso.</p>
+              </div>
+            </div>
+            <ol className="grid gap-3">
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">1. Crie a sala e configure nome, pontos, categorias e tempo de voto.</li>
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">2. Adicione os jogadores e comece a partida no momento certo.</li>
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">3. Em cada rodada, a pergunta aparece e os jogadores votam no culpado.</li>
+              <li className="rounded-md border-2 border-ink bg-paper p-3 font-bold">4. Veja o resultado e siga para a próxima rodada ou final da partida.</li>
+            </ol>
+          </Card>
+
+          <Card className="grid gap-4 bg-white">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="text-teal" size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Regras</h2>
+                <p className="text-sm font-bold text-zinc-600">O que o jogo espera de cada rodada.</p>
+              </div>
+            </div>
+            <div className="grid gap-3">
+              <div className="rounded-md border-2 border-ink bg-tomato p-3 text-white">
+                Se o tempo de voto acabar, a vez é pulada e o voto fica vazio.
+              </div>
+              <div className="rounded-md border-2 border-ink bg-gold p-3 font-bold">
+                Cada jogador pode votar uma vez por rodada. Ninguém vota em si mesmo.
+              </div>
+              <div className="rounded-md border-2 border-ink bg-paper p-3 font-bold">
+                A partida termina quando alguém alcança a pontuação máxima da sala.
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="grid gap-4 bg-teal text-white">
+            <div className="flex items-center gap-3">
+              <UserRound size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Opções do jogador</h2>
+                <p className="text-sm font-bold opacity-90">O que aparece para quem está jogando.</p>
+              </div>
+            </div>
+            <ul className="grid gap-2 text-sm font-bold">
+              <li>Entrar na sala pelo código.</li>
+              <li>Ver sua vez na rodada atual.</li>
+              <li>Escolher um suspeito para votar.</li>
+              <li>Acompanhar o placar e o resultado.</li>
+            </ul>
+          </Card>
+
+          <Card className="grid gap-4 bg-paper">
+            <div className="flex items-center gap-3">
+              <Crown className="text-tomato" size={28} />
+              <div>
+                <h2 className="text-2xl font-black">Opções do anfitrião</h2>
+                <p className="text-sm font-bold text-zinc-600">Controle da sala e da rodada.</p>
+              </div>
+            </div>
+            <ul className="grid gap-2 text-sm font-bold">
+              <li>Criar a sala e escolher o tempo de voto.</li>
+              <li>Filtrar perguntas por categoria.</li>
+              <li>Adicionar jogadores antes de iniciar.</li>
+              <li>Gerenciar a partida até o fim.</li>
+            </ul>
+          </Card>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => navigate(-1)}>
+            <ArrowLeft className="mr-2 inline" size={18} /> Voltar
+          </Button>
+          <Button variant="secondary" onClick={() => navigate('/')}>
+            <Users className="mr-2 inline" size={18} /> Ir para a home
+          </Button>
         </div>
       </section>
     </Shell>
@@ -341,7 +483,9 @@ function CreateRoom() {
     maxScore: 5,
     gameMode: 'classic',
     voteVisibility: 'anonymous',
-    categoryFilter: [] as string[],
+    voteTimeEnabled: false,
+    voteTimeSeconds: 30,
+    categoryFilter: 'all',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -397,20 +541,37 @@ function CreateRoom() {
               </Select>
             </Field>
             <Field label="Categoria">
-              <Select
-                multiple
-                value={form.categoryFilter}
-                onChange={(e) => setForm({ ...form, categoryFilter: Array.from(e.target.selectedOptions).map((option) => option.value) })}
-                className="min-h-32"
-              >
+              <Select value={form.categoryFilter} onChange={(e) => setForm({ ...form, categoryFilter: e.target.value })}>
+                <option value="all">Todas</option>
                 {categories.filter((category) => category.isActive).map((category) => (
                   <option key={category.id} value={category.slug}>{category.name}</option>
                 ))}
               </Select>
             </Field>
           </div>
-          <p className="text-sm font-bold">Sem seleÃ§Ã£o, a sala usa todas as categorias.</p>
-          <Button disabled={loading}>{loading ? 'Criando...' : 'Criar sala'}</Button>
+          <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
+            <label className="flex items-center gap-3 rounded-md border-2 border-ink bg-paper px-3 py-3 font-black">
+              <input
+                type="checkbox"
+                checked={form.voteTimeEnabled}
+                onChange={(e) => setForm({ ...form, voteTimeEnabled: e.target.checked })}
+                className="h-5 w-5 accent-black"
+              />
+              Tempo de voto
+            </label>
+            <Field label="Max. segundos">
+              <Input
+                type="number"
+                min={10}
+                max={60}
+                disabled={!form.voteTimeEnabled}
+                value={form.voteTimeSeconds}
+                onChange={(e) => setForm({ ...form, voteTimeSeconds: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+          <p className="text-sm font-bold">Sem seleção específica, a sala usa todas as categorias.</p>
+          <p className="text-sm font-bold">Se o tempo acabar sem voto, a vez pula e conta como voto vazio.</p>          <Button disabled={loading}>{loading ? 'Criando...' : 'Criar sala'}</Button>
         </form>
       </Card>
     </Shell>
@@ -1388,6 +1549,7 @@ function Game() {
   const [selected, setSelected] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
   const navigate = useNavigate();
 
   async function loadRound() {
@@ -1397,7 +1559,12 @@ function Game() {
       const stored = Number(localStorage.getItem(roundKey(code)));
       const current = stored ? await gameApi.getRound(token, stored) : await gameApi.createRound(token, code);
       localStorage.setItem(roundKey(code), String(current.roundId));
+      if (current.status === 'finished') {
+        navigate(`/room/${code}/result`);
+        return;
+      }
       setRound(current);
+      setNow(Date.now());
       setVoterIndex(Math.min(current.votesReceived, current.players.length - 1));
     } catch (err) {
       setError(apiError(err));
@@ -1410,8 +1577,22 @@ function Game() {
     loadRound();
   }, [code]);
 
+  useEffect(() => {
+    if (!round?.voteDeadlineAt || round.status !== 'waiting_votes') return undefined;
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+      if (Date.parse(round.voteDeadlineAt ?? '') <= Date.now()) {
+        loadRound();
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [round?.voteDeadlineAt, round?.status]);
+
   const voter = round?.players[voterIndex];
   const options = useMemo(() => round?.players.filter((player) => player.id !== voter?.id) ?? [], [round, voter]);
+  const secondsLeft = round?.voteDeadlineAt ? Math.max(0, Math.ceil((Date.parse(round.voteDeadlineAt) - now) / 1000)) : null;
 
   async function vote() {
     if (!round || !voter || !selected) return;
@@ -1442,6 +1623,11 @@ function Game() {
           <span className="rounded-md bg-violet px-3 py-1 font-black text-white">Rodada {round.roundNumber}</span>
           <span className="font-black">{round.votesReceived}/{round.totalPlayers}</span>
         </div>
+        {secondsLeft !== null ? (
+          <div className="rounded-md border-2 border-ink bg-teal px-3 py-2 font-black">
+            Tempo restante: {secondsLeft}s
+          </div>
+        ) : null}
         <h1 className="text-3xl font-black leading-tight">{round.question.text}</h1>
         <div className="rounded-md border-2 border-ink bg-gold px-3 py-2 font-black">
           Vez de {voter?.name}
@@ -1578,6 +1764,7 @@ export default function App() {
       <Route path="/room/:code/game" element={<RequirePlayerSession><Game /></RequirePlayerSession>} />
       <Route path="/room/:code/result" element={<RequirePlayerSession><Result /></RequirePlayerSession>} />
       <Route path="/room/:code/final" element={<RequirePlayerSession><Final /></RequirePlayerSession>} />
+      <Route path="/help" element={<HelpPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
