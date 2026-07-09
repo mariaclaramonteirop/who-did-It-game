@@ -140,6 +140,8 @@ function Admin() {
   const emptyForm = { text: '', category: 'geral', level: 'leve' };
   const [questions, setQuestions] = useState<Question[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rolê?,festa,leve\nQuem fez isso no improviso?,caos,medio');
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editing, setEditing] = useState(emptyForm);
   const [error, setError] = useState('');
@@ -172,6 +174,33 @@ function Admin() {
     try {
       await gameApi.createQuestion({ ...form, text: form.text.trim() });
       setForm(emptyForm);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function importFromCsv(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    try {
+      await gameApi.importQuestionsCsv(importCsv);
+      load();
+    } catch (err) {
+      setError(apiError(err));
+    }
+  }
+
+  async function importFromFile(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    if (!importFile) {
+      setError('Escolha um arquivo CSV ou JSON.');
+      return;
+    }
+    try {
+      await gameApi.importQuestionsFile(importFile);
+      setImportFile(null);
       load();
     } catch (err) {
       setError(apiError(err));
@@ -237,6 +266,27 @@ function Admin() {
               </Field>
             </div>
             <Button type="submit"><Plus className="mr-2 inline" size={18} /> Adicionar</Button>
+          </form>
+        </Card>
+        <Card className="grid gap-4">
+          <h2 className="text-2xl font-black">Importar perguntas</h2>
+          <p className="font-bold">Formato aceito no CSV: `text,category,level`.</p>
+          <form onSubmit={importFromFile} className="grid gap-3">
+            <Field label="Arquivo CSV ou JSON">
+              <Input type="file" accept=".csv,.json" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+            </Field>
+            <Button type="submit" variant="secondary">Importar arquivo</Button>
+          </form>
+          <form onSubmit={importFromCsv} className="grid gap-3">
+            <Field label="CSV bruto">
+              <textarea
+                value={importCsv}
+                onChange={(event) => setImportCsv(event.target.value)}
+                rows={6}
+                className="min-h-32 rounded-md border-2 border-ink bg-white px-3 py-2 text-base"
+              />
+            </Field>
+            <Button type="submit">Importar CSV</Button>
           </form>
         </Card>
         <Card className="grid gap-4">

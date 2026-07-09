@@ -35,6 +35,7 @@ final class Routes
 
         $app->get('/questions', fn ($request, $response) => (new QuestionController($service()))->list($request, $response));
         $app->post('/questions', fn ($request, $response) => (new QuestionController($service()))->create($request, $response));
+        $app->post('/questions/import', fn ($request, $response) => (new QuestionController($service()))->import($request, $response));
         $app->patch('/questions/{id}', fn ($request, $response, $args) => (new QuestionController($service()))->update($request, $response, $args));
         $app->delete('/questions/{id}', fn ($request, $response, $args) => (new QuestionController($service()))->deactivate($request, $response, $args));
     }

@@ -28,4 +28,10 @@ export const gameApi = {
   createQuestion: (payload: Omit<Question, 'id' | 'isActive'>) => api.post<Question>('/questions', payload).then((r) => r.data),
   updateQuestion: (id: number, payload: Partial<Omit<Question, 'id'>>) => api.patch<Question>(`/questions/${id}`, payload).then((r) => r.data),
   deactivateQuestion: (id: number) => api.delete<Question>(`/questions/${id}`).then((r) => r.data),
+  importQuestionsFile: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/questions/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);
+  },
+  importQuestionsCsv: (csv: string) => api.post('/questions/import', { csv }).then((r) => r.data),
 };

@@ -35,4 +35,42 @@ final class QuestionController
     {
         return JsonResponse::send($response, $this->service->setQuestionActive((int) $args['id'], false));
     }
+
+    public function import(Request $request, Response $response): Response
+    {
+        $questions = $this->extractQuestions($request);
+        return JsonResponse::send($response, $this->service->importQuestions($questions), 201);
+    }
+
+    private function extractQuestions(Request $request): array
+    {
+        $uploaded = $request->getUploadedFiles();
+        if (isset($uploaded['file'])) {
+            $file = $uploaded['file'];
+            $contents = (string) $file->getStream();
+            $name = strtolower($file->getClientFilename() ?? '');
+            if (str_ends_with($name, '.csv')) {
+                return $this->service->parseQuestionsCsv($contents);
+            }
+            if (str_ends_with($name, '.json')) {
+                $decoded = json_decode($contents, true);
+                if (!is_array($decoded)) {
+                    throw new \App\Exceptions\HttpException(422, 'Arquivo JSON invalido.');
+                }
+                return $decoded;
+            }
+
+            throw new \App\Exceptions\HttpException(422, 'Use um arquivo CSV ou JSON.');
+        }
+
+        $body = (array) $request->getParsedBody();
+        if (isset($body['csv'])) {
+            return $this->service->parseQuestionsCsv((string) $body['csv']);
+        }
+        if (isset($body['questions']) && is_array($body['questions'])) {
+            return $body['questions'];
+        }
+
+        throw new \App\Exceptions\HttpException(422, 'Envie um arquivo ou um JSON com questions.');
+    }
 }

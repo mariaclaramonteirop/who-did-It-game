@@ -244,6 +244,36 @@ final class GameService
         ]));
     }
 
+    public function importQuestions(array $questions): array
+    {
+        $normalized = [];
+        foreach ($questions as $index => $question) {
+            if (!is_array($question)) {
+                throw new HttpException(422, 'Formato invalido na linha ' . ($index + 1) . '.');
+            }
+
+            $text = trim((string) ($question['text'] ?? ''));
+            if ($text === '') {
+                throw new HttpException(422, 'Pergunta vazia na linha ' . ($index + 1) . '.');
+            }
+
+            $normalized[] = [
+                'text' => $text,
+                'category' => trim((string) ($question['category'] ?? 'geral')) ?: 'geral',
+                'level' => in_array(($question['level'] ?? 'leve'), ['leve', 'medio', 'pesado', 'caos'], true) ? $question['level'] : 'leve',
+            ];
+        }
+
+        if ($normalized === []) {
+            throw new HttpException(422, 'Envie pelo menos uma pergunta para importacao.');
+        }
+
+        $count = $this->questions->createMany($normalized);
+        return [
+            'imported' => $count,
+        ];
+    }
+
     public function updateQuestion(int $id, array $payload): array
     {
         $current = $this->questions->find($id);
@@ -370,6 +400,32 @@ final class GameService
             'level' => $question['level'],
             'isActive' => (bool) $question['is_active'],
         ];
+    }
+
+    public function parseQuestionsCsv(string $csv): array
+    {
+        $lines = preg_split('/\r\n|\n|\r/', trim($csv));
+        if (!$lines || count($lines) < 2) {
+            throw new HttpException(422, 'CSV precisa ter cabecalho e ao menos uma linha.');
+        }
+
+        $header = array_map('trim', str_getcsv(array_shift($lines)));
+        $questions = [];
+        foreach ($lines as $lineNumber => $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+
+            $row = array_map('trim', str_getcsv($line));
+            $assoc = [];
+            foreach ($header as $index => $column) {
+                $assoc[$column] = $row[$index] ?? '';
+            }
+
+            $questions[] = $assoc;
+        }
+
+        return $questions;
     }
 
     private function formatPlayers(array $players): array

@@ -21,6 +21,7 @@ Sistema web de party game com perguntas aleatorias, votacao entre amigos, contag
 - Finalizar a partida quando alguem atingir a pontuacao maxima
 - Exibir ranking atualizado e tela final
 - Area admin para cadastrar, editar, ativar e desativar perguntas
+- Importacao em lote de perguntas via CSV ou JSON no admin
 
 ## Como rodar
 
@@ -45,6 +46,7 @@ http://localhost:5173/admin
 ```
 
 No MVP, o admin gerencia perguntas e mostra graficos simples por status, categoria e nivel.
+Tambem aceita importacao em lote por arquivo CSV/JSON ou por CSV colado no formulario.
 
 Credenciais do banco:
 
@@ -68,6 +70,7 @@ GET /questions
 POST /questions
 PATCH /questions/{id}
 DELETE /questions/{id}
+POST /questions/import
 ```
 
 ## Exemplos
@@ -100,6 +103,20 @@ Registrar voto:
   "voterPlayerId": 1,
   "votedPlayerId": 2
 }
+
+Importar perguntas por CSV:
+
+```csv
+text,category,level
+Quem fez isso no rolê?,festa,leve
+Quem fez isso no improviso?,caos,medio
+```
+
+O endpoint `POST /questions/import` aceita:
+
+- upload de arquivo `.csv` ou `.json`
+- JSON com `questions: []`
+- CSV bruto em `csv`
 ```
 
 ## Estrutura
@@ -125,3 +142,4 @@ docker-compose.yml
 - Associar perguntas a categorias cadastradas.
 - Permitir escolher categorias/generos ao criar a sala.
 - Sortear perguntas respeitando as categorias selecionadas na partida.
+- Permitir categorias/generos com gestão propria e filtro na criacao da sala.
