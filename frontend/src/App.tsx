@@ -6,7 +6,7 @@ import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
 import { VisitorMode } from './visitor/VisitorMode';
-import type { AdminDashboard, AdminPlayer, AdminRoom, AdminUser, Category, Player, PlayerAccount, Question, Room, Round, RoundResult } from './types/game';
+import type { AdminDashboard, AdminPlayerAccount, AdminRoom, AdminUser, Category, Player, PlayerAccount, Question, Room, Round, RoundResult } from './types/game';
 
 const roundKey = (code: string) => `jdc-round-${code}`;
 const PLAYER_TOKEN_KEY = 'jdc-player-token';
@@ -54,7 +54,7 @@ function Shell({ children }: { children: ReactNode }) {
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {showBack ? (
-            <Button type="button" variant="ghost" className="h-11 w-11 shrink-0 px-0" onClick={() => navigate(-1)}>
+            <Button type="button" variant="ghost" className="h-11 w-11 shrink-0 px-0" onClick={() => navigate(-1)} title="Voltar" aria-label="Voltar">
               <ArrowLeft size={18} />
             </Button>
           ) : null}
@@ -109,7 +109,7 @@ function Home() {
             <div className="flex flex-wrap gap-2">
               <Button type="button" onClick={() => navigate('/painel')}>Abrir painel</Button>
               <Button type="button" onClick={() => navigate('/create-room')}>Criar sala</Button>
-              <Button type="button" variant="ghost" onClick={() => { clearPlayerSession(); navigate('/'); }}>Sair</Button>
+              <Button type="button" variant="ghost" onClick={() => { clearPlayerSession(); navigate('/'); }} title="Sair">Sair</Button>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -335,7 +335,7 @@ function PlayerPanel() {
               <h1 className="text-3xl font-black">Ola, {user.name}</h1>
               <p className="font-bold">{user.username} · {user.email}</p>
             </div>
-            <Button type="button" variant="ghost" onClick={() => navigate('/')}>Voltar</Button>
+            <Button type="button" variant="ghost" onClick={() => navigate('/')} title="Voltar">Voltar</Button>
           </div>
           <form onSubmit={saveProfile} className="grid gap-3">
             <div className="grid gap-3 md:grid-cols-2">
@@ -358,7 +358,7 @@ function PlayerPanel() {
               <Button type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar perfil'}</Button>
               <Button type="button" onClick={() => navigate('/create-room')}>Criar sala</Button>
               <Button type="button" variant="secondary" onClick={() => navigate('/acesso')}>Entrar na sala</Button>
-              <Button type="button" variant="ghost" onClick={() => { clearPlayerSession(); navigate('/'); }}>Sair</Button>
+              <Button type="button" variant="ghost" onClick={() => { clearPlayerSession(); navigate('/'); }} title="Sair">Sair</Button>
             </div>
           </form>
         </Card>
@@ -670,7 +670,7 @@ function Admin() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
-  const [players, setPlayers] = useState<AdminPlayer[]>([]);
+  const [players, setPlayers] = useState<AdminPlayerAccount[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [filters, setFilters] = useState({ search: '', category: 'all', level: 'all', status: 'all' });
@@ -681,7 +681,8 @@ function Admin() {
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '' });
   const [categoryEditingId, setCategoryEditingId] = useState<number | null>(null);
   const [categoryEditing, setCategoryEditing] = useState({ name: '', slug: '' });
-  const [adminPlayerForm, setAdminPlayerForm] = useState({ roomCode: '', name: '', score: 0, isHost: false });
+  const [adminPlayerForm, setAdminPlayerForm] = useState({ username: '', email: '', name: '', password: '', isActive: true });
+  const [playerPasswords, setPlayerPasswords] = useState<Record<number, string>>({});
   const [adminForm, setAdminForm] = useState({ username: '', name: '', password: '', role: 'manager', permissions: ['questions', 'categories'] });
   const [adminPasswords, setAdminPasswords] = useState<Record<number, string>>({});
   const [error, setError] = useState('');
@@ -892,17 +893,32 @@ function Admin() {
     }
   }
 
-  async function updatePlayer(player: AdminPlayer) {
+  async function updatePlayer(player: AdminPlayerAccount) {
     setError('');
     try {
-      await gameApi.updateAdminPlayer(token, player.id, player);
+      const password = playerPasswords[player.id]?.trim() ?? '';
+      if (!player.username.trim()) return setError('Informe o usuario.');
+      if (!player.email.trim()) return setError('Informe o email.');
+      if (!player.name.trim()) return setError('Informe o nome.');
+      await gameApi.updateAdminPlayer(token, player.id, {
+        username: player.username.trim(),
+        email: player.email.trim(),
+        name: player.name.trim(),
+        isActive: player.isActive,
+        ...(password ? { password } : {}),
+      });
+      setPlayerPasswords((current) => {
+        const next = { ...current };
+        delete next[player.id];
+        return next;
+      });
       load();
     } catch (err) {
       setError(apiError(err));
     }
   }
 
-  async function deletePlayer(player: AdminPlayer) {
+  async function deletePlayer(player: AdminPlayerAccount) {
     setError('');
     try {
       await gameApi.deleteAdminPlayer(token, player.id);
@@ -927,16 +943,19 @@ function Admin() {
   async function createAdminPlayer(event: FormEvent) {
     event.preventDefault();
     setError('');
-    if (!adminPlayerForm.roomCode.trim()) return setError('Informe o codigo da sala.');
+    if (!adminPlayerForm.username.trim()) return setError('Informe o usuario.');
+    if (!adminPlayerForm.email.trim()) return setError('Informe o email.');
     if (!adminPlayerForm.name.trim()) return setError('Informe o nome do usuario.');
+    if (adminPlayerForm.password.trim().length < 6) return setError('A senha precisa ter pelo menos 6 caracteres.');
     try {
       await gameApi.createAdminPlayer(token, {
-        roomCode: adminPlayerForm.roomCode.trim(),
+        username: adminPlayerForm.username.trim(),
+        email: adminPlayerForm.email.trim(),
         name: adminPlayerForm.name.trim(),
-        score: Math.max(0, adminPlayerForm.score),
-        isHost: adminPlayerForm.isHost,
+        password: adminPlayerForm.password,
+        isActive: adminPlayerForm.isActive,
       });
-      setAdminPlayerForm({ roomCode: adminPlayerForm.roomCode.trim(), name: '', score: 0, isHost: false });
+      setAdminPlayerForm({ username: '', email: '', name: '', password: '', isActive: true });
       load();
     } catch (err) {
       setError(apiError(err));
@@ -1013,7 +1032,7 @@ function Admin() {
               <h1 className="text-3xl font-black">Admin</h1>
               <p className="mt-2 font-bold">Quem fez isso? Who Did It?</p>
             </div>
-            <Button type="button" variant="ghost" onClick={logout}>Sair</Button>
+            <Button type="button" variant="ghost" onClick={logout} title="Sair">Sair</Button>
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-4">
@@ -1243,12 +1262,20 @@ function Admin() {
           <h2 className="text-2xl font-black">Usuarios do jogo</h2>
           <form onSubmit={createAdminPlayer} className="grid gap-3 rounded-md border-2 border-ink bg-white p-3">
             <p className="text-sm font-black uppercase text-zinc-600">Novo usuario</p>
-            <div className="grid gap-3 md:grid-cols-[140px_1fr_120px_auto]">
-              <Field label="Sala">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <Field label="Usuario">
                 <Input
-                  value={adminPlayerForm.roomCode}
-                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, roomCode: event.target.value })}
-                  placeholder="4821"
+                  value={adminPlayerForm.username}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, username: event.target.value })}
+                  placeholder="maria"
+                />
+              </Field>
+              <Field label="Email">
+                <Input
+                  type="email"
+                  value={adminPlayerForm.email}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, email: event.target.value })}
+                  placeholder="maria@exemplo.com"
                 />
               </Field>
               <Field label="Nome">
@@ -1258,21 +1285,21 @@ function Admin() {
                   placeholder="Maria"
                 />
               </Field>
-              <Field label="Score">
+              <Field label="Senha">
                 <Input
-                  type="number"
-                  min={0}
-                  value={adminPlayerForm.score}
-                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, score: Number(event.target.value) })}
+                  type="password"
+                  value={adminPlayerForm.password}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, password: event.target.value })}
+                  placeholder="******"
                 />
               </Field>
               <label className="flex items-center gap-2 rounded-md border-2 border-ink bg-paper px-3 py-2 font-black">
                 <input
                   type="checkbox"
-                  checked={adminPlayerForm.isHost}
-                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, isHost: event.target.checked })}
+                  checked={adminPlayerForm.isActive}
+                  onChange={(event) => setAdminPlayerForm({ ...adminPlayerForm, isActive: event.target.checked })}
                 />
-                Host
+                Ativo
               </label>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1282,15 +1309,40 @@ function Admin() {
           {players.length === 0 ? <p className="font-bold">Nenhum usuario encontrado.</p> : null}
           {players.map((player) => (
             <div key={player.id} className="grid gap-3 rounded-md border-2 border-ink bg-paper p-3">
-              <p className="font-black">Sala {player.roomCode} - {player.roomName}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-black">{player.username}</p>
+                <span className={`rounded-md px-2 py-1 text-sm font-black ${player.isActive ? 'bg-teal text-white' : 'bg-zinc-500 text-white'}`}>
+                  {player.isActive ? 'Ativo' : 'Inativo'}
+                </span>
+              </div>
               <p className="text-xs font-bold text-zinc-600">Cadastrado em {formatAdminDate(player.createdAt)} · Atualizado em {formatAdminDate(player.updatedAt)}</p>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                <Input value={player.username} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, username: event.target.value } : item))} />
+                <Input type="email" value={player.email} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, email: event.target.value } : item))} />
                 <Input value={player.name} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} />
-                <Input type="number" value={player.score} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, score: Number(event.target.value) } : item))} />
                 <label className="flex items-center gap-2 rounded-md border-2 border-ink bg-white px-3 py-2 font-black">
-                  <input type="checkbox" checked={!!player.isHost} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, isHost: event.target.checked } : item))} />
-                  Host
+                  <input type="checkbox" checked={!!player.isActive} onChange={(event) => setPlayers(players.map((item) => item.id === player.id ? { ...item, isActive: event.target.checked } : item))} />
+                  Ativo
                 </label>
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                <Input
+                  type="password"
+                  placeholder="Nova senha"
+                  value={playerPasswords[player.id] ?? ''}
+                  onChange={(event) => setPlayerPasswords({ ...playerPasswords, [player.id]: event.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setPlayerPasswords((current) => {
+                    const next = { ...current };
+                    delete next[player.id];
+                    return next;
+                  })}
+                >
+                  Limpar senha
+                </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button type="button" onClick={() => updatePlayer(player)}>Salvar</Button>
@@ -1468,9 +1520,16 @@ function Admin() {
                   ) : (
                     <Button type="button" variant="ghost" onClick={() => startEdit(question)}><Edit3 size={18} /></Button>
                   )}
-                  <Button type="button" variant="secondary" onClick={() => toggleQuestion(question)}>
-                    {question.isActive ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 w-9 px-0"
+                  title={question.isActive ? 'Desativar pergunta' : 'Ativar pergunta'}
+                  aria-label={question.isActive ? 'Desativar pergunta' : 'Ativar pergunta'}
+                  onClick={() => toggleQuestion(question)}
+                >
+                  {question.isActive ? <EyeOff size={18} /> : <Eye size={18} />}
+                </Button>
                   <Button type="button" variant="ghost" onClick={() => setEditingId(null)}>OK</Button>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type {
   AdminDashboard,
-  AdminPlayer,
+  AdminPlayerAccount,
   AdminRoom,
   AdminUser,
   Category,
@@ -57,11 +57,13 @@ export const gameApi = {
   updateAdminRoom: (token: string, id: number, payload: Partial<AdminRoom>) =>
     api.patch<AdminRoom>(`/admin/rooms/${id}`, payload, auth(token)).then((r) => r.data),
   deleteAdminRoom: (token: string, id: number) => api.delete(`/admin/rooms/${id}`, auth(token)).then((r) => r.data),
-  adminPlayers: (token: string) => api.get<AdminPlayer[]>('/admin/players', auth(token)).then((r) => r.data),
-  createAdminPlayer: (token: string, payload: { roomCode: string; name: string; score: number; isHost: boolean }) =>
-    api.post<AdminPlayer>('/admin/players', payload, auth(token)).then((r) => r.data),
-  updateAdminPlayer: (token: string, id: number, payload: Partial<AdminPlayer>) =>
-    api.patch<Player>(`/admin/players/${id}`, payload, auth(token)).then((r) => r.data),
+  adminPlayers: (token: string) => api.get<AdminPlayerAccount[]>('/admin/players', auth(token)).then((r) => r.data),
+  createAdminPlayer: (
+    token: string,
+    payload: { username: string; email: string; name: string; password: string; isActive?: boolean },
+  ) => api.post<AdminPlayerAccount>('/admin/players', payload, auth(token)).then((r) => r.data),
+  updateAdminPlayer: (token: string, id: number, payload: Partial<AdminPlayerAccount> & { password?: string }) =>
+    api.patch<AdminPlayerAccount>(`/admin/players/${id}`, payload, auth(token)).then((r) => r.data),
   deleteAdminPlayer: (token: string, id: number) => api.delete(`/admin/players/${id}`, auth(token)).then((r) => r.data),
   adminUsers: (token: string) => api.get<AdminUser[]>('/admin/users', auth(token)).then((r) => r.data),
   createAdminUser: (token: string, payload: { username: string; name: string; password: string; role: string; permissions: string[] }) =>

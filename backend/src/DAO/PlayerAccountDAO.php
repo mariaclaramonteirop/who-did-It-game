@@ -52,6 +52,11 @@ final class PlayerAccountDAO
         return $stmt->fetch() ?: null;
     }
 
+    public function list(): array
+    {
+        return $this->db->query('SELECT * FROM player_accounts ORDER BY created_at DESC')->fetchAll();
+    }
+
     public function findByIdentifier(string $identifier): ?array
     {
         $stmt = $this->db->prepare(
@@ -97,5 +102,11 @@ final class PlayerAccountDAO
         $stmt = $this->db->prepare('UPDATE player_accounts SET ' . implode(', ', $sets) . ' WHERE id = :id');
         $stmt->execute($params);
         return $this->find($id);
+    }
+
+    public function delete(int $id): void
+    {
+        $stmt = $this->db->prepare('DELETE FROM player_accounts WHERE id = :id');
+        $stmt->execute(['id' => $id]);
     }
 }

@@ -561,73 +561,90 @@ final class GameService
 
     public function adminListPlayers(): array
     {
-        return array_map(fn (array $player) => $this->formatAdminPlayer($player), $this->players->listAll());
+        return array_map(fn (array $account) => $this->formatAdminPlayerAccount($account), $this->playerAccounts->list());
     }
 
     public function adminCreatePlayer(array $payload): array
     {
-        $roomCode = strtoupper(trim((string) ($payload['roomCode'] ?? '')));
+        $username = $this->normalizeUsername($payload['username'] ?? '');
+        $email = $this->normalizeEmail($payload['email'] ?? '');
         $name = trim((string) ($payload['name'] ?? ''));
-        $score = max(0, (int) ($payload['score'] ?? 0));
-        $isHost = (bool) ($payload['isHost'] ?? false);
+        $password = (string) ($payload['password'] ?? '');
+        $isActive = array_key_exists('isActive', $payload) ? (bool) $payload['isActive'] : true;
 
-        if ($roomCode === '') {
-            throw new HttpException(422, 'Informe o codigo da sala.');
+        if ($username === '') {
+            throw new HttpException(422, 'Informe o nome de usuario.');
+        }
+        if ($email === '') {
+            throw new HttpException(422, 'Informe o email.');
         }
         if ($name === '') {
-            throw new HttpException(422, 'Informe o nome do usuario.');
+            throw new HttpException(422, 'Informe o nome.');
+        }
+        if (strlen($password) < 6) {
+            throw new HttpException(422, 'A senha precisa ter pelo menos 6 caracteres.');
+        }
+        if ($this->playerAccounts->findByIdentifier($username) !== null) {
+            throw new HttpException(409, 'Ja existe um usuario com esse nome.');
+        }
+        if ($this->playerAccounts->findByIdentifier($email) !== null) {
+            throw new HttpException(409, 'Ja existe uma conta com esse email.');
         }
 
-        $room = $this->requireRoom($roomCode);
-        $currentPlayers = $this->players->listByRoom((int) $room['id']);
-        foreach ($currentPlayers as $player) {
-            if (strtolower($player['name']) === strtolower($name)) {
-                throw new HttpException(409, 'Ja existe um jogador com esse nome na sala.');
-            }
-        }
-
-        $player = $this->players->create((int) $room['id'], $name, $isHost || $currentPlayers === [], null);
-        if ($score > 0) {
-            $this->players->update((int) $player['id'], [
-                'name' => $player['name'],
-                'score' => $score,
-                'isHost' => (bool) $player['is_host'],
-            ]);
-            $player = $this->players->find((int) $player['id']);
-        }
-
-        if ($room['status'] === Room::WAITING_PLAYERS && count($currentPlayers) + 1 >= 3) {
-            $this->rooms->updateStatus((int) $room['id'], Room::READY);
-        }
-
-        return $this->formatAdminPlayer($player);
+        return $this->formatAdminPlayerAccount($this->playerAccounts->create([
+            'username' => $username,
+            'email' => $email,
+            'name' => $name,
+            'passwordHash' => password_hash($password, PASSWORD_DEFAULT),
+            'isActive' => $isActive,
+        ]));
     }
 
     public function adminUpdatePlayer(int $id, array $payload): array
     {
-        $current = $this->players->find($id);
+        $current = $this->playerAccounts->find($id);
         if ($current === null) {
             throw new HttpException(404, 'Usuario nao encontrado.');
         }
 
-        $name = trim((string) ($payload['name'] ?? $current['name']));
-        if ($name === '') {
-            throw new HttpException(422, 'Informe o nome do usuario.');
+        $username = array_key_exists('username', $payload) ? $this->normalizeUsername($payload['username']) : $current['username'];
+        $email = array_key_exists('email', $payload) ? $this->normalizeEmail($payload['email']) : $current['email'];
+        $name = array_key_exists('name', $payload) ? trim((string) $payload['name']) : $current['name'];
+        $password = (string) ($payload['password'] ?? '');
+        $isActive = array_key_exists('isActive', $payload) ? (bool) $payload['isActive'] : (bool) $current['is_active'];
+
+        if ($username === '' || $email === '' || $name === '') {
+            throw new HttpException(422, 'Informe usuario, email e nome validos.');
+        }
+        if ($this->playerAccounts->findByIdentifierExceptId($username, $id) !== null) {
+            throw new HttpException(409, 'Ja existe um usuario com esse nome.');
+        }
+        if ($this->playerAccounts->findByIdentifierExceptId($email, $id) !== null) {
+            throw new HttpException(409, 'Ja existe uma conta com esse email.');
         }
 
-        return $this->formatPlayer($this->players->update($id, [
+        $data = [
+            'username' => $username,
+            'email' => $email,
             'name' => $name,
-            'score' => max(0, (int) ($payload['score'] ?? $current['score'])),
-            'isHost' => array_key_exists('isHost', $payload) ? (bool) $payload['isHost'] : (bool) $current['is_host'],
-        ]));
+            'is_active' => $isActive ? 1 : 0,
+        ];
+        if ($password !== '') {
+            if (strlen($password) < 6) {
+                throw new HttpException(422, 'A senha precisa ter pelo menos 6 caracteres.');
+            }
+            $data['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+        }
+
+        return $this->formatAdminPlayerAccount($this->playerAccounts->update($id, $data));
     }
 
     public function adminDeletePlayer(int $id): array
     {
-        if ($this->players->find($id) === null) {
+        if ($this->playerAccounts->find($id) === null) {
             throw new HttpException(404, 'Usuario nao encontrado.');
         }
-        $this->players->delete($id);
+        $this->playerAccounts->delete($id);
         return ['deleted' => true];
     }
 
@@ -1006,6 +1023,19 @@ final class GameService
             'roomName' => $player['room_name'],
             'createdAt' => $player['created_at'] ?? null,
             'updatedAt' => $player['updated_at'] ?? null,
+        ];
+    }
+
+    private function formatAdminPlayerAccount(array $account): array
+    {
+        return [
+            'id' => (int) $account['id'],
+            'username' => $account['username'],
+            'email' => $account['email'],
+            'name' => $account['name'],
+            'isActive' => (bool) $account['is_active'],
+            'createdAt' => $account['created_at'] ?? null,
+            'updatedAt' => $account['updated_at'] ?? null,
         ];
     }
 

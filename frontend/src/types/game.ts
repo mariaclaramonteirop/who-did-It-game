@@ -105,6 +105,16 @@ export type AdminPlayer = Player & {
   updatedAt?: string | null;
 };
 
+export type AdminPlayerAccount = {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  isActive: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
 export type AdminDashboard = {
   totals: Record<string, number>;
   roomsByStatus: Array<{ label: string; value: number }>;
