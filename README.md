@@ -1,6 +1,8 @@
 # Quem fez isso? Who Did It?
 
-![Logo do jogo](frontend/public/logo.png)
+<p align="center">
+  <img src="frontend/public/logo.png" alt="Logo do jogo" width="220" />
+</p>
 
 Sistema web de party game com perguntas aleatorias, votacao entre amigos, contagem de votos, pontuacao por rodada, ranking final e administracao.
 
