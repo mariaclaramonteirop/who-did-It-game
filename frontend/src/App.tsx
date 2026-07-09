@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, ListPlus, Play, Plus, RotateCcw, Save, Settings, Users } from 'lucide-react';
+import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Users } from 'lucide-react';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
@@ -13,9 +13,7 @@ function Shell({ children }: { children: ReactNode }) {
     <main className="mx-auto grid min-h-screen w-full max-w-3xl content-start gap-5 px-4 py-5 sm:py-8">
       <header className="flex items-center justify-between gap-3">
         <Link to="/" className="text-xl font-black text-ink sm:text-2xl">Quem fez isso?</Link>
-        <Link to="/admin" className="grid h-10 w-10 place-items-center rounded-md border-2 border-ink bg-teal shadow-crisp" title="Admin">
-          <Settings size={18} />
-        </Link>
+        <div className="h-10 w-10 rounded-md border-2 border-ink bg-teal shadow-crisp" aria-hidden />
       </header>
       {children}
     </main>
@@ -39,7 +37,7 @@ function Home() {
           <p className="mt-1 text-xl font-black">Who Did It?</p>
           <p className="mt-3 max-w-xl text-lg font-bold">Pergunta na mesa, voto secreto e ranking sem misericordia.</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Card className="grid content-between gap-4">
             <Users size={36} className="text-tomato" />
             <h2 className="text-2xl font-black">Nova sala</h2>
@@ -55,13 +53,6 @@ function Home() {
               </Field>
               <Button type="submit" variant="secondary">Abrir sala</Button>
             </form>
-          </Card>
-          <Card className="grid content-between gap-4">
-            <ListPlus size={36} className="text-violet" />
-            <h2 className="text-2xl font-black">Admin</h2>
-            <Button type="button" variant="ghost" onClick={() => navigate('/admin')}>
-              Perguntas
-            </Button>
           </Card>
         </div>
       </section>

@@ -36,6 +36,16 @@ Servicos:
 - phpMyAdmin: http://localhost:8081
 - MySQL: localhost:3307
 
+## Admin
+
+O admin nao aparece na navegacao do jogo. Ele deve ser acessado diretamente por URL:
+
+```txt
+http://localhost:5173/admin
+```
+
+No MVP, o admin gerencia perguntas e mostra graficos simples por status, categoria e nivel.
+
 Credenciais do banco:
 
 - Database: `jogo_dos_culpados`
@@ -108,3 +118,10 @@ frontend/
   src/
 docker-compose.yml
 ```
+
+## Proximos passos
+
+- Cadastrar categorias/generos pelo admin em vez de usar texto livre.
+- Associar perguntas a categorias cadastradas.
+- Permitir escolher categorias/generos ao criar a sala.
+- Sortear perguntas respeitando as categorias selecionadas na partida.
