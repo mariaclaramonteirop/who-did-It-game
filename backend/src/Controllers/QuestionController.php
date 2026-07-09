@@ -17,11 +17,22 @@ final class QuestionController
 
     public function list(Request $request, Response $response): Response
     {
-        return JsonResponse::send($response, $this->service->listQuestions());
+        $params = $request->getQueryParams();
+        return JsonResponse::send($response, $this->service->listQuestions(($params['includeInactive'] ?? '') === '1'));
     }
 
     public function create(Request $request, Response $response): Response
     {
         return JsonResponse::send($response, $this->service->createQuestion((array) $request->getParsedBody()), 201);
+    }
+
+    public function update(Request $request, Response $response, array $args): Response
+    {
+        return JsonResponse::send($response, $this->service->updateQuestion((int) $args['id'], (array) $request->getParsedBody()));
+    }
+
+    public function deactivate(Request $request, Response $response, array $args): Response
+    {
+        return JsonResponse::send($response, $this->service->setQuestionActive((int) $args['id'], false));
     }
 }

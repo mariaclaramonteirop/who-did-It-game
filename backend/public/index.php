@@ -23,10 +23,13 @@ $app->add(function (Request $request, $handler): Response {
     return $response
         ->withHeader('Access-Control-Allow-Origin', '*')
         ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
 });
 
-$app->options('/{routes:.+}', fn (Request $request, Response $response) => $response);
+$app->options('/{routes:.+}', fn (Request $request, Response $response) => $response
+    ->withHeader('Access-Control-Allow-Origin', '*')
+    ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS'));
 
 Routes::register($app);
 

@@ -220,14 +220,15 @@ final class GameService
         return $this->formatPlayers($this->players->listByRoom((int) $room['id']));
     }
 
-    public function listQuestions(): array
+    public function listQuestions(bool $includeInactive = false): array
     {
         return array_map(fn (array $question) => [
             'id' => (int) $question['id'],
             'text' => $question['text'],
             'category' => $question['category'],
             'level' => $question['level'],
-        ], $this->questions->list());
+            'isActive' => (bool) $question['is_active'],
+        ], $this->questions->list($includeInactive));
     }
 
     public function createQuestion(array $payload): array
@@ -236,11 +237,42 @@ final class GameService
         if ($text === '') {
             throw new HttpException(422, 'Informe o texto da pergunta.');
         }
-        return $this->questions->create([
+        return $this->formatQuestion($this->questions->create([
             'text' => $text,
             'category' => trim((string) ($payload['category'] ?? 'geral')) ?: 'geral',
             'level' => $payload['level'] ?? 'leve',
+        ]));
+    }
+
+    public function updateQuestion(int $id, array $payload): array
+    {
+        $current = $this->questions->find($id);
+        if ($current === null) {
+            throw new HttpException(404, 'Pergunta nao encontrada.');
+        }
+
+        $text = trim((string) ($payload['text'] ?? $current['text']));
+        if ($text === '') {
+            throw new HttpException(422, 'Informe o texto da pergunta.');
+        }
+
+        $question = $this->questions->update($id, [
+            'text' => $text,
+            'category' => trim((string) ($payload['category'] ?? $current['category'])) ?: 'geral',
+            'level' => $payload['level'] ?? $current['level'],
+            'isActive' => array_key_exists('isActive', $payload) ? (bool) $payload['isActive'] : (bool) $current['is_active'],
         ]);
+
+        return $this->formatQuestion($question);
+    }
+
+    public function setQuestionActive(int $id, bool $isActive): array
+    {
+        if ($this->questions->find($id) === null) {
+            throw new HttpException(404, 'Pergunta nao encontrada.');
+        }
+
+        return $this->formatQuestion($this->questions->setActive($id, $isActive));
     }
 
     private function closeRound(array $round, int $roundId): void
@@ -326,6 +358,17 @@ final class GameService
             'name' => $player['name'],
             'score' => (int) $player['score'],
             'isHost' => (bool) $player['is_host'],
+        ];
+    }
+
+    private function formatQuestion(array $question): array
+    {
+        return [
+            'id' => (int) $question['id'],
+            'text' => $question['text'],
+            'category' => $question['category'],
+            'level' => $question['level'],
+            'isActive' => (bool) $question['is_active'],
         ];
     }
 
