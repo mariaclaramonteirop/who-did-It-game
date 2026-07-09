@@ -1,0 +1,6 @@
+.env
+vendor/
+node_modules/
+dist/
+.DS_Store
+mysql_data/
