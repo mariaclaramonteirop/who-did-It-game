@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Save, Settings, Users } from 'lucide-react';
+import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, ListPlus, Play, Plus, RotateCcw, Save, Settings, Users } from 'lucide-react';
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
@@ -39,7 +39,7 @@ function Home() {
           <p className="mt-1 text-xl font-black">Who Did It?</p>
           <p className="mt-3 max-w-xl text-lg font-bold">Pergunta na mesa, voto secreto e ranking sem misericordia.</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Card className="grid content-between gap-4">
             <Users size={36} className="text-tomato" />
             <h2 className="text-2xl font-black">Nova sala</h2>
@@ -55,6 +55,13 @@ function Home() {
               </Field>
               <Button type="submit" variant="secondary">Abrir sala</Button>
             </form>
+          </Card>
+          <Card className="grid content-between gap-4">
+            <ListPlus size={36} className="text-violet" />
+            <h2 className="text-2xl font-black">Admin</h2>
+            <Button type="button" variant="ghost" onClick={() => navigate('/admin')}>
+              Perguntas
+            </Button>
           </Card>
         </div>
       </section>
@@ -146,6 +153,10 @@ function Admin() {
   const [editing, setEditing] = useState(emptyForm);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const activeCount = questions.filter((question) => question.isActive).length;
+  const inactiveCount = questions.length - activeCount;
+  const categoryStats = buildStats(questions.map((question) => question.category));
+  const levelStats = buildStats(questions.map((question) => question.level));
 
   async function load() {
     setLoading(true);
@@ -237,6 +248,21 @@ function Admin() {
             <Button type="submit"><Plus className="mr-2 inline" size={18} /> Adicionar</Button>
           </form>
         </Card>
+        <Card className="grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-2xl font-black">Graficos</h2>
+            <span className="rounded-md bg-ink px-3 py-1 text-sm font-black text-white">{questions.length} perguntas</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatBox label="Total" value={questions.length} tone="bg-gold" />
+            <StatBox label="Ativas" value={activeCount} tone="bg-teal text-white" />
+            <StatBox label="Inativas" value={inactiveCount} tone="bg-zinc-500 text-white" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <BarChart title="Por categoria" stats={categoryStats} total={questions.length} />
+            <BarChart title="Por nivel" stats={levelStats} total={questions.length} />
+          </div>
+        </Card>
         <Card className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-black">Perguntas</h2>
@@ -288,6 +314,50 @@ function Admin() {
         </Card>
       </section>
     </Shell>
+  );
+}
+
+function buildStats(items: string[]) {
+  return Object.entries(
+    items.reduce<Record<string, number>>((acc, item) => {
+      const key = item || 'sem categoria';
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+}
+
+function StatBox({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className={`rounded-md border-2 border-ink p-3 ${tone}`}>
+      <p className="text-sm font-black uppercase">{label}</p>
+      <p className="text-3xl font-black">{value}</p>
+    </div>
+  );
+}
+
+function BarChart({ title, stats, total }: { title: string; stats: Array<{ label: string; value: number }>; total: number }) {
+  return (
+    <div className="grid gap-3 rounded-md border-2 border-ink bg-paper p-3">
+      <h3 className="text-lg font-black">{title}</h3>
+      {stats.length === 0 ? <p className="font-bold">Sem dados.</p> : null}
+      {stats.map((item) => {
+        const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
+        return (
+          <div key={item.label} className="grid gap-1">
+            <div className="flex justify-between gap-3 text-sm font-black">
+              <span className="truncate">{item.label}</span>
+              <span>{item.value} · {percent}%</span>
+            </div>
+            <div className="h-4 overflow-hidden rounded-sm border-2 border-ink bg-white">
+              <div className="h-full bg-tomato" style={{ width: `${percent}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
