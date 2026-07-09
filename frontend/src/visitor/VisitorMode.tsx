@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, Copy, Plus, RotateCcw, Users } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Plus, Users } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, Card, ErrorMessage, Field, Input, Select } from '../components/ui';
 import { Ranking } from '../components/Ranking';
@@ -21,6 +21,7 @@ type VisitorRound = {
 type VisitorSession = {
   code: string;
   name: string;
+  createdAt: string;
   maxPlayers: number;
   maxScore: number;
   categoryFilter: string[];
@@ -32,6 +33,7 @@ type VisitorSession = {
 };
 
 const CURRENT_SESSION_KEY = 'jdc-visitor-current';
+const VISITOR_NAME_KEY = 'jdc-visitor-username';
 
 function sessionKey(code: string) {
   return `jdc-visitor-${code}`;
@@ -46,10 +48,51 @@ function loadSession(): VisitorSession | null {
     const code = localStorage.getItem(CURRENT_SESSION_KEY);
     if (!code) return null;
     const raw = localStorage.getItem(sessionKey(code));
-    return raw ? (JSON.parse(raw) as VisitorSession) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<VisitorSession>;
+    return {
+      code: parsed.code ?? code,
+      name: parsed.name ?? 'Mesa dos visitantes',
+      createdAt: parsed.createdAt ?? new Date().toISOString(),
+      maxPlayers: parsed.maxPlayers ?? 6,
+      maxScore: parsed.maxScore ?? 5,
+      categoryFilter: parsed.categoryFilter ?? [],
+      players: parsed.players ?? [],
+      phase: parsed.phase ?? 'setup',
+      roundNumber: parsed.roundNumber ?? 0,
+      round: parsed.round,
+      usedQuestionIds: parsed.usedQuestionIds ?? [],
+    };
   } catch {
     return null;
   }
+}
+
+function loadSessionByCode(code: string): VisitorSession | null {
+  try {
+    const raw = localStorage.getItem(sessionKey(code));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<VisitorSession>;
+    return {
+      code: parsed.code ?? code,
+      name: parsed.name ?? 'Mesa dos visitantes',
+      createdAt: parsed.createdAt ?? new Date().toISOString(),
+      maxPlayers: parsed.maxPlayers ?? 6,
+      maxScore: parsed.maxScore ?? 5,
+      categoryFilter: parsed.categoryFilter ?? [],
+      players: parsed.players ?? [],
+      phase: parsed.phase ?? 'setup',
+      roundNumber: parsed.roundNumber ?? 0,
+      round: parsed.round,
+      usedQuestionIds: parsed.usedQuestionIds ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function loadVisitorName(): string {
+  return localStorage.getItem(VISITOR_NAME_KEY) ?? '';
 }
 
 function pickQuestion(usedIds: number[], categories: string[]) {
@@ -77,6 +120,9 @@ export function VisitorMode() {
   const navigate = useNavigate();
   const [session, setSession] = useState<VisitorSession | null>(() => loadSession());
   const [error, setError] = useState('');
+  const [visitorName, setVisitorName] = useState(() => loadVisitorName());
+  const [visitorFlow, setVisitorFlow] = useState<'identity' | 'menu' | 'create' | 'join'>(() => (loadVisitorName() ? 'menu' : 'identity'));
+  const [joinCode, setJoinCode] = useState('');
   const [roomForm, setRoomForm] = useState({
     name: 'Mesa dos visitantes',
     maxPlayers: 6,
@@ -85,11 +131,17 @@ export function VisitorMode() {
   });
   const [playerName, setPlayerName] = useState('');
   const [selected, setSelected] = useState<number | null>(null);
-  const [addedAt] = useState(() => new Date().toISOString());
 
   const categories = useMemo(() => {
     return Array.from(new Set(CASUAL_QUESTIONS.map((question) => question.category))).sort();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(VISITOR_NAME_KEY, visitorName);
+    if (visitorName && visitorFlow === 'identity') {
+      setVisitorFlow('menu');
+    }
+  }, [visitorName]);
 
   useEffect(() => {
     if (!session) return;
@@ -97,13 +149,36 @@ export function VisitorMode() {
     localStorage.setItem(sessionKey(session.code), JSON.stringify(session));
   }, [session]);
 
+  function saveVisitorIdentity(event: FormEvent) {
+    event.preventDefault();
+    if (!visitorName.trim()) {
+      setError('Informe seu nome de usuario.');
+      return;
+    }
+    setError('');
+    setVisitorName(visitorName.trim());
+    setVisitorFlow('menu');
+  }
+
+  function ensureVisitorInSession(nextSession: VisitorSession): VisitorSession {
+    const trimmed = visitorName.trim();
+    if (!trimmed) return nextSession;
+    const hasVisitor = nextSession.players.some((player) => player.name.toLowerCase() === trimmed.toLowerCase());
+    if (hasVisitor) return nextSession;
+    return {
+      ...nextSession,
+      players: [...nextSession.players, { id: Date.now(), name: trimmed, score: 0 }],
+    };
+  }
+
   function createSession(event: FormEvent) {
     event.preventDefault();
     setError('');
     const code = generateCode();
-    const nextSession: VisitorSession = {
+    const nextSession: VisitorSession = ensureVisitorInSession({
       code,
       name: roomForm.name.trim() || 'Mesa dos visitantes',
+      createdAt: new Date().toISOString(),
       maxPlayers: Math.max(3, Math.min(20, roomForm.maxPlayers)),
       maxScore: Math.max(1, Math.min(30, roomForm.maxScore)),
       categoryFilter: roomForm.categoryFilter,
@@ -111,13 +186,45 @@ export function VisitorMode() {
       phase: 'setup',
       roundNumber: 0,
       usedQuestionIds: [],
-    };
+    });
     setSession(nextSession);
     setPlayerName('');
+    setVisitorFlow('menu');
+  }
+
+  function openExistingSession(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    const code = joinCode.trim();
+    if (!code) {
+      setError('Informe o codigo da sala.');
+      return;
+    }
+    const nextSession = loadSessionByCode(code);
+    if (!nextSession) {
+      setError('Sala nao encontrada neste navegador.');
+      return;
+    }
+    setSession(ensureVisitorInSession(nextSession));
+    setJoinCode('');
+    setVisitorFlow('menu');
   }
 
   function persist(nextSession: VisitorSession) {
     setSession(nextSession);
+  }
+
+  async function copyRoomCode(code: string) {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        setError('Copie manualmente o codigo da sala.');
+        return;
+      }
+      await navigator.clipboard.writeText(code);
+      setError('');
+    } catch {
+      setError('Nao foi possivel copiar o codigo da sala.');
+    }
   }
 
   function resetSession() {
@@ -267,41 +374,107 @@ export function VisitorMode() {
           </Link>
           <Button type="button" variant="ghost" onClick={() => navigate('/')}>Voltar</Button>
         </header>
-        <Card className="grid gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-black">Modo visitante</h1>
-              <p className="mt-2 font-bold">Sem login, sem backend, com perguntas locais no navegador.</p>
+        {visitorFlow === 'identity' ? (
+          <Card className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-black">Modo visitante</h1>
+                <p className="mt-2 font-bold">Sem login, sem backend, com perguntas locais no navegador.</p>
+              </div>
+              <Users size={36} className="text-tomato" />
             </div>
-            <Users size={36} className="text-tomato" />
-          </div>
-          <form onSubmit={createSession} className="grid gap-4">
-            <Field label="Nome da mesa">
-              <Input value={roomForm.name} onChange={(event) => setRoomForm({ ...roomForm, name: event.target.value })} />
-            </Field>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Jogadores">
-                <Input type="number" min={3} max={20} value={roomForm.maxPlayers} onChange={(event) => setRoomForm({ ...roomForm, maxPlayers: Number(event.target.value) })} />
+            <form onSubmit={saveVisitorIdentity} className="grid gap-4">
+              <Field label="Seu nome de usuario">
+                <Input value={visitorName} onChange={(event) => setVisitorName(event.target.value)} placeholder="Maria" />
               </Field>
-              <Field label="Pontos para vencer">
-                <Input type="number" min={1} max={30} value={roomForm.maxScore} onChange={(event) => setRoomForm({ ...roomForm, maxScore: Number(event.target.value) })} />
-              </Field>
+              <ErrorMessage message={error} />
+              <Button type="submit">Continuar</Button>
+            </form>
+          </Card>
+        ) : null}
+
+        {visitorFlow === 'menu' ? (
+          <Card className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-black">Modo visitante</h1>
+                <p className="mt-2 font-bold">Ola, {visitorName}. Escolha uma entrada.</p>
+              </div>
+              <Users size={36} className="text-tomato" />
             </div>
-            <Field label="Categorias">
-              <Select
-                multiple
-                value={roomForm.categoryFilter}
-                onChange={(event) => setRoomForm({ ...roomForm, categoryFilter: Array.from(event.target.selectedOptions).map((option) => option.value) })}
-                className="min-h-32"
-              >
-                {categories.map((category) => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">Criar modo visitante</Button>
-          </form>
-        </Card>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => setVisitorFlow('create')}>Criar sala</Button>
+              <Button type="button" variant="secondary" onClick={() => setVisitorFlow('join')}>Entrar na sala</Button>
+              <Button type="button" variant="ghost" onClick={() => { setVisitorFlow('identity'); setVisitorName(''); localStorage.removeItem(VISITOR_NAME_KEY); }}>
+                Trocar usuario
+              </Button>
+            </div>
+          </Card>
+        ) : null}
+
+        {visitorFlow === 'create' ? (
+          <Card className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-black">Criar sala</h1>
+                <p className="mt-2 font-bold">Sala local criada com {visitorName} como primeiro jogador.</p>
+              </div>
+              <Users size={36} className="text-tomato" />
+            </div>
+            <form onSubmit={createSession} className="grid gap-4">
+              <Field label="Nome da mesa">
+                <Input value={roomForm.name} onChange={(event) => setRoomForm({ ...roomForm, name: event.target.value })} />
+              </Field>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Jogadores">
+                  <Input type="number" min={3} max={20} value={roomForm.maxPlayers} onChange={(event) => setRoomForm({ ...roomForm, maxPlayers: Number(event.target.value) })} />
+                </Field>
+                <Field label="Pontos para vencer">
+                  <Input type="number" min={1} max={30} value={roomForm.maxScore} onChange={(event) => setRoomForm({ ...roomForm, maxScore: Number(event.target.value) })} />
+                </Field>
+              </div>
+              <Field label="Categorias">
+                <Select
+                  multiple
+                  value={roomForm.categoryFilter}
+                  onChange={(event) => setRoomForm({ ...roomForm, categoryFilter: Array.from(event.target.selectedOptions).map((option) => option.value) })}
+                  className="min-h-32"
+                >
+                  {categories.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </Select>
+              </Field>
+              <ErrorMessage message={error} />
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit">Criar modo visitante</Button>
+                <Button type="button" variant="ghost" onClick={() => setVisitorFlow('menu')}>Voltar</Button>
+              </div>
+            </form>
+          </Card>
+        ) : null}
+
+        {visitorFlow === 'join' ? (
+          <Card className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-black">Entrar na sala</h1>
+                <p className="mt-2 font-bold">Abra uma sala local que ja exista neste navegador.</p>
+              </div>
+              <Users size={36} className="text-tomato" />
+            </div>
+            <form onSubmit={openExistingSession} className="grid gap-4">
+              <Field label="Codigo da sala">
+                <Input value={joinCode} onChange={(event) => setJoinCode(event.target.value)} placeholder="4821" />
+              </Field>
+              <ErrorMessage message={error} />
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" variant="secondary">Entrar na sala</Button>
+                <Button type="button" variant="ghost" onClick={() => setVisitorFlow('menu')}>Voltar</Button>
+              </div>
+            </form>
+          </Card>
+        ) : null}
       </main>
     );
   }
@@ -315,7 +488,7 @@ export function VisitorMode() {
           <img src="/logo.png" alt="Quem fez isso?" className="h-12 w-auto" />
         </Link>
         <div className="flex gap-2">
-          <Button type="button" variant="ghost" onClick={() => navigator.clipboard?.writeText(session.code)}><Copy size={18} /></Button>
+          <Button type="button" variant="ghost" onClick={() => copyRoomCode(session.code)}><Copy size={18} /></Button>
           <Button type="button" variant="ghost" onClick={() => navigate('/')}><ArrowLeft size={18} /></Button>
         </div>
       </header>
@@ -324,7 +497,7 @@ export function VisitorMode() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-black">{session.name}</h1>
-            <p className="font-bold">Sala {session.code} · criado em {formatDateTime(addedAt)}</p>
+            <p className="font-bold">Sala {session.code} � criado em {formatDateTime(session.createdAt)}</p>
           </div>
           <span className="rounded-md bg-ink px-3 py-1 font-black text-white">{session.phase.toUpperCase()}</span>
         </div>
@@ -404,3 +577,4 @@ export function VisitorMode() {
     </main>
   );
 }
+
