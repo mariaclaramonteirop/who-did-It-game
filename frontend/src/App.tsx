@@ -4,6 +4,7 @@ import { ArrowRight, Check, Copy, Edit3, Eye, EyeOff, Play, Plus, RotateCcw, Sav
 import { apiError, gameApi } from './api/client';
 import { Button, Card, ErrorMessage, Field, Input, Loading, Select } from './components/ui';
 import { Ranking } from './components/Ranking';
+import { VisitorMode } from './visitor/VisitorMode';
 import type { AdminDashboard, AdminPlayer, AdminRoom, AdminUser, Category, Player, Question, Room, Round, RoundResult } from './types/game';
 
 const roundKey = (code: string) => `jdc-round-${code}`;
@@ -12,7 +13,9 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-3xl content-start gap-5 px-4 py-5 sm:py-8">
       <header className="flex items-center justify-between gap-3">
-        <Link to="/" className="text-xl font-black text-ink sm:text-2xl">Quem fez isso?</Link>
+        <Link to="/" aria-label="Quem fez isso?" className="inline-flex items-center gap-3">
+          <img src="/logo.png" alt="" className="h-12 w-auto" />
+        </Link>
         <div className="h-10 w-10 rounded-md border-2 border-ink bg-teal shadow-crisp" aria-hidden />
       </header>
       {children}
@@ -32,15 +35,20 @@ function Home() {
   return (
     <Shell>
       <section className="grid gap-4">
-        <div className="rounded-lg border-2 border-ink bg-gold p-5 shadow-crisp">
-          <h1 className="text-4xl font-black leading-none sm:text-5xl">Quem fez isso?</h1>
-          <p className="mt-1 text-xl font-black">Who Did It?</p>
-          <p className="mt-3 max-w-xl text-lg font-bold">Pergunta na mesa, voto secreto e ranking sem misericordia.</p>
+        <div className="grid gap-4 rounded-lg border-2 border-ink bg-gold p-5 shadow-crisp">
+          <div className="flex flex-wrap items-center gap-4">
+            <img src="/logo.png" alt="Quem fez isso?" className="h-24 w-auto" />
+            <div className="grid gap-1">
+              <h1 className="text-4xl font-black leading-none sm:text-5xl">Quem fez isso?</h1>
+              <p className="text-xl font-black">Who Did It?</p>
+            </div>
+          </div>
+          <p className="max-w-xl text-lg font-bold">Pergunta na mesa, voto secreto e ranking sem misericordia.</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Card className="grid content-between gap-4">
             <Users size={36} className="text-tomato" />
-            <h2 className="text-2xl font-black">Nova sala</h2>
+            <h2 className="text-2xl font-black">Jogar online</h2>
             <Button onClick={() => navigate('/create-room')}>
               Criar <ArrowRight className="ml-2 inline" size={18} />
             </Button>
@@ -53,6 +61,16 @@ function Home() {
               </Field>
               <Button type="submit" variant="secondary">Abrir sala</Button>
             </form>
+          </Card>
+          <Card className="grid content-between gap-4">
+            <div className="grid gap-2">
+              <Users size={36} className="text-tomato" />
+              <h2 className="text-2xl font-black">Modo visitante</h2>
+              <p className="font-bold">Sem login e sem backend, com jogo local no navegador.</p>
+            </div>
+            <Button onClick={() => navigate('/visitante')}>
+              Entrar <ArrowRight className="ml-2 inline" size={18} />
+            </Button>
           </Card>
         </div>
       </section>
@@ -1311,6 +1329,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/visitante" element={<VisitorMode />} />
       <Route path="/create-room" element={<CreateRoom />} />
       <Route path="/room/:code/setup-players" element={<SetupPlayers />} />
       <Route path="/room/:code/lobby" element={<Lobby />} />

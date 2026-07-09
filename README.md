@@ -26,6 +26,8 @@ Sistema web de party game com perguntas aleatorias, votacao entre amigos, contag
 - Importacao em lote de perguntas via CSV ou JSON no admin
 - Cadastro e gerenciamento de categorias no admin
 - Selecao de uma ou mais categorias ao criar sala
+- Tela inicial com escolha entre jogo online e modo visitante/anônimo
+- Modo visitante rodando no navegador, sem login e sem backend
 
 ## Como rodar
 
@@ -37,6 +39,7 @@ Servicos:
 
 - Frontend: http://localhost:5173
 - Admin: http://localhost:5173/admin
+- Visitante: http://localhost:5173/visitante
 - Backend: http://localhost:8080
 - phpMyAdmin: http://localhost:8081
 - MySQL: localhost:3307
@@ -56,6 +59,7 @@ O admin abre com login e nao aparece na navegacao do jogo. Credencial inicial lo
 
 No Docker, esses valores podem ser alterados por `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_SECRET`.
 O admin tem menu em abas: Dashboard, Perguntas, Categorias, Importar, Salas, Usuarios, Admins e Graficos. A aba Perguntas tem filtros por texto, categoria, nivel e status. Administradores podem ter permissoes para `questions`, `categories`, `rooms`, `players`, `admins` ou `all`.
+O modo visitante nao depende de login e salva a sessao localmente no navegador.
 
 Credenciais do banco:
 
