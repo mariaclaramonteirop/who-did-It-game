@@ -738,12 +738,12 @@ final class GameService
         $normalized = [];
         foreach ($questions as $index => $question) {
             if (!is_array($question)) {
-                throw new HttpException(422, 'Formato invalido na linha ' . ($index + 1) . '.');
+                throw new HttpException(422, 'Nao foi possivel ler a linha ' . ($index + 1) . '. Envie cada pergunta como um objeto com text, category e level.');
             }
 
             $text = trim((string) ($question['text'] ?? ''));
             if ($text === '') {
-                throw new HttpException(422, 'Pergunta vazia na linha ' . ($index + 1) . '.');
+                throw new HttpException(422, 'A pergunta da linha ' . ($index + 1) . ' esta vazia. Preencha o campo text.');
             }
 
             $normalized[] = [
@@ -754,12 +754,13 @@ final class GameService
         }
 
         if ($normalized === []) {
-            throw new HttpException(422, 'Envie pelo menos uma pergunta para importacao.');
+            throw new HttpException(422, 'Nao havia perguntas validas para importar.');
         }
 
-        $count = $this->questions->createMany($normalized);
+        $created = array_map(fn (array $question) => $this->formatQuestion($question), $this->questions->createMany($normalized));
         return [
-            'imported' => $count,
+            'imported' => count($created),
+            'questions' => $created,
         ];
     }
 
@@ -1247,7 +1248,7 @@ final class GameService
     {
         $lines = preg_split('/\r\n|\n|\r/', trim($csv));
         if (!$lines || count($lines) < 2) {
-            throw new HttpException(422, 'CSV precisa ter cabecalho e ao menos uma linha.');
+            throw new HttpException(422, 'O CSV precisa ter cabecalho e pelo menos uma pergunta.');
         }
 
         $header = array_map('trim', str_getcsv(array_shift($lines)));

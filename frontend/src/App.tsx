@@ -676,6 +676,7 @@ function Admin() {
   const [filters, setFilters] = useState({ search: '', category: 'all', level: 'all', status: 'all' });
   const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rol??,festa,leve\nQuem fez isso no improviso?,caos,medio');
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; questions: Question[] } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editing, setEditing] = useState(emptyForm);
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '' });
@@ -771,8 +772,10 @@ function Admin() {
   async function importFromCsv(event: FormEvent) {
     event.preventDefault();
     setError('');
+    setImportResult(null);
     try {
-      await gameApi.importQuestionsCsv(token, importCsv);
+      const result = await gameApi.importQuestionsCsv(token, importCsv);
+      setImportResult(result);
       load();
     } catch (err) {
       setError(apiError(err));
@@ -782,16 +785,21 @@ function Admin() {
   async function importFromFile(event: FormEvent) {
     event.preventDefault();
     setError('');
+    setImportResult(null);
     if (!importFile) {
-      setError('Escolha um arquivo CSV ou JSON.');
+      setError('Escolha um arquivo CSV ou JSON para importar.');
       return;
     }
     try {
-      await gameApi.importQuestionsFile(token, importFile);
+      const result = await gameApi.importQuestionsFile(token, importFile);
+      setImportResult(result);
       setImportFile(null);
       load();
     } catch (err) {
-      setError(apiError(err));
+      const message = apiError(err);
+      setError(message.includes('linha') || message.includes('CSV') || message.includes('JSON')
+        ? `Nao foi possivel importar este arquivo: ${message}`
+        : message);
     }
   }
 
@@ -1208,6 +1216,22 @@ function Admin() {
         <Card id="admin-import" className="grid gap-4">
           <h2 className="text-2xl font-black">Importar perguntas</h2>
           <p className="font-bold">Formato aceito no CSV: `text,category,level`.</p>
+          {importResult ? (
+            <div className="grid gap-3 rounded-md border-2 border-teal bg-teal/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-lg font-black text-ink">Importacao concluida</p>
+                <span className="rounded-md bg-teal px-2 py-1 text-sm font-black text-white">{importResult.imported} pergunta(s)</span>
+              </div>
+              <div className="grid gap-2">
+                {importResult.questions.map((question) => (
+                  <div key={question.id} className="rounded-md border-2 border-ink bg-white p-3">
+                    <p className="font-black">{question.text}</p>
+                    <p className="text-sm font-bold text-zinc-700">Categoria: {question.category} · Nivel: {question.level}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <form onSubmit={importFromFile} className="grid gap-3">
             <Field label="Arquivo CSV ou JSON">
               <Input type="file" accept=".csv,.json" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />

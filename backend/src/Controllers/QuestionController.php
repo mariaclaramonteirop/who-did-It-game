@@ -59,12 +59,12 @@ final class QuestionController
             if (str_ends_with($name, '.json')) {
                 $decoded = json_decode($contents, true);
                 if (!is_array($decoded)) {
-                    throw new \App\Exceptions\HttpException(422, 'Arquivo JSON invalido.');
+                    throw new \App\Exceptions\HttpException(422, 'Nao consegui ler o JSON do arquivo. Verifique se ele esta bem formatado.');
                 }
                 return $decoded;
             }
 
-            throw new \App\Exceptions\HttpException(422, 'Use um arquivo CSV ou JSON.');
+            throw new \App\Exceptions\HttpException(422, 'Envie um arquivo CSV ou JSON valido.');
         }
 
         $body = (array) $request->getParsedBody();
@@ -75,6 +75,6 @@ final class QuestionController
             return $body['questions'];
         }
 
-        throw new \App\Exceptions\HttpException(422, 'Envie um arquivo ou um JSON com questions.');
+        throw new \App\Exceptions\HttpException(422, 'Envie um arquivo CSV/JSON ou um corpo com questions.');
     }
 }

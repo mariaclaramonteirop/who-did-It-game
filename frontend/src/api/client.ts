@@ -14,13 +14,35 @@ import type {
   RoundResult,
 } from '../types/game';
 
+type ImportQuestionsResult = {
+  imported: number;
+  questions: Question[];
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
 });
 
 export function apiError(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    return error.response?.data?.message ?? 'Nao foi possivel conectar ao servidor.';
+    const payload = error.response?.data;
+    if (typeof payload === 'string' && payload.trim()) {
+      return payload;
+    }
+    if (payload && typeof payload === 'object') {
+      const message = (payload as { message?: unknown }).message;
+      if (typeof message === 'string' && message.trim()) {
+        return message;
+      }
+      const fallbackError = (payload as { error?: unknown }).error;
+      if (typeof fallbackError === 'string' && fallbackError.trim()) {
+        return fallbackError;
+      }
+    }
+    if (!error.response) {
+      return 'Nao foi possivel conectar ao servidor. Verifique se o backend esta rodando em http://localhost:8080.';
+    }
+    return `Erro ${error.response.status} ao comunicar com o servidor.`;
   }
   return 'Algo saiu do esperado.';
 }
@@ -77,9 +99,9 @@ export const gameApi = {
   importQuestionsFile: (token: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post('/questions/import', formData, { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` } }).then((r) => r.data);
+    return api.post<ImportQuestionsResult>('/questions/import', formData, { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` } }).then((r) => r.data);
   },
-  importQuestionsCsv: (token: string, csv: string) => api.post('/questions/import', { csv }, auth(token)).then((r) => r.data),
+  importQuestionsCsv: (token: string, csv: string) => api.post<ImportQuestionsResult>('/questions/import', { csv }, auth(token)).then((r) => r.data),
   listCategories: (includeInactive = false) =>
     api.get<Category[]>('/categories', { params: includeInactive ? { includeInactive: 1 } : {} }).then((r) => r.data),
   createCategory: (token: string, payload: { name: string; slug?: string }) => api.post<Category>('/categories', payload, auth(token)).then((r) => r.data),

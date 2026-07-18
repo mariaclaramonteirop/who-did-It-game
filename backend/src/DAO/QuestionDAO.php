@@ -23,20 +23,20 @@ final class QuestionDAO
         return $this->find((int) $this->db->lastInsertId());
     }
 
-    public function createMany(array $questions): int
+    public function createMany(array $questions): array
     {
         $stmt = $this->db->prepare('INSERT INTO questions (text, category, level) VALUES (:text, :category, :level)');
-        $count = 0;
+        $created = [];
         foreach ($questions as $question) {
             $stmt->execute([
                 'text' => $question['text'],
                 'category' => $question['category'] ?? 'geral',
                 'level' => $question['level'] ?? 'leve',
             ]);
-            $count++;
+            $created[] = $this->find((int) $this->db->lastInsertId());
         }
 
-        return $count;
+        return array_values(array_filter($created));
     }
 
     public function find(int $id): ?array
