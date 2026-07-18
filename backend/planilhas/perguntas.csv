@@ -1,0 +1,101 @@
+id,categoria,nivel,pergunta
+1,Amizade,Leve,Quem sempre chega atrasado?
+2,Amizade,Leve,Quem esqueceria a carteira em casa?
+3,Amizade,Leve,Quem perderia o celular primeiro?
+4,Amizade,Leve,Quem dormiria durante um filme?
+5,Amizade,Leve,Quem faria amizade com qualquer desconhecido?
+6,Amizade,Leve,Quem sobreviveria mais tempo numa ilha deserta?
+7,Amizade,Leve,Quem provavelmente seria famoso?
+8,Amizade,Leve,Quem seria demitido na primeira semana?
+9,Amizade,Leve,Quem faria uma tatuagem por impulso?
+10,Amizade,Leve,Quem compraria algo só porque estava em promoção?
+11,Amizade,Leve,Quem passaria vergonha em público sem perceber?
+12,Amizade,Leve,Quem esquece datas importantes?
+13,Amizade,Leve,Quem contaria uma piada ruim?
+14,Amizade,Leve,Quem mais canta no banho?
+15,Amizade,Leve,Quem passaria horas vendo vídeos curtos?
+16,Amizade,Leve,Quem gastaria todo o salário em um dia?
+17,Amizade,Leve,Quem faria amizade com um cachorro antes das pessoas?
+18,Amizade,Leve,Quem pisaria em cocô na rua?
+19,Amizade,Leve,Quem deixaria a bateria acabar sempre?
+20,Amizade,Leve,Quem mandaria mensagem para a pessoa errada?
+21,Trabalho,Leve,Quem pediria férias no primeiro mês?
+22,Trabalho,Leve,Quem esqueceria uma reunião?
+23,Trabalho,Leve,Quem dormiria no home office?
+24,Trabalho,Leve,Quem responderia "todos" por acidente?
+25,Trabalho,Leve,Quem mais enrola antes de começar uma tarefa?
+26,Trabalho,Leve,Quem teria a mesa mais bagunçada?
+27,Trabalho,Leve,Quem seria promovido mais rápido?
+28,Trabalho,Leve,Quem faria um café horrível?
+29,Trabalho,Leve,Quem ficaria famoso por um meme da empresa?
+30,Trabalho,Leve,Quem pisaria na bola numa apresentação?
+31,Relacionamentos,Leve,Quem esqueceria uma data de namoro?
+32,Relacionamentos,Leve,Quem responderia "ok" numa discussão?
+33,Relacionamentos,Leve,Quem faria uma declaração muito exagerada?
+34,Relacionamentos,Leve,Quem mais sofre por ficante?
+35,Relacionamentos,Leve,Quem voltaria com ex?
+36,Relacionamentos,Leve,Quem se apaixonaria primeiro?
+37,Relacionamentos,Leve,Quem daria um presente estranho?
+38,Relacionamentos,Leve,Quem faria ciúmes de propósito?
+39,Relacionamentos,Leve,Quem criaria um perfil fake para investigar alguém?
+40,Relacionamentos,Leve,Quem mandaria mensagem bêbado?
+41,Polemica,Media,Quem seria preso primeiro?
+42,Polemica,Media,Quem esconderia uma multa?
+43,Polemica,Media,Quem mentiria para escapar de uma situação?
+44,Polemica,Media,Quem venderia um segredo por dinheiro?
+45,Polemica,Media,Quem pisaria em alguém para conseguir uma promoção?
+46,Polemica,Media,Quem largaria tudo para virar influencer?
+47,Polemica,Media,Quem fingiria estar doente para faltar?
+48,Polemica,Media,Quem daria um golpe se tivesse certeza de que não seria descoberto?
+49,Polemica,Media,Quem abriria um OnlyFans primeiro?
+50,Polemica,Media,Quem aceitaria participar de um reality show?
+51,Absurdo,Media,Quem sobreviveria a um apocalipse zumbi?
+52,Absurdo,Media,Quem esqueceria um filho no mercado?
+53,Absurdo,Media,Quem pisaria num palco e cairia?
+54,Absurdo,Media,Quem seria confundido com um famoso?
+55,Absurdo,Media,Quem faria amizade com um extraterrestre?
+56,Absurdo,Media,Quem entraria na casa errada?
+57,Absurdo,Media,Quem seria cancelado na internet?
+58,Absurdo,Media,Quem faria uma live sem perceber que estava ao vivo?
+59,Absurdo,Media,Quem compraria NFT em 2026?
+60,Absurdo,Media,Quem venderia tudo para viajar pelo mundo?
+61,Dificil,Polemica,Quem seria o pior presidente?
+62,Dificil,Polemica,Quem esconderia uma herança?
+63,Dificil,Polemica,Quem terminaria uma amizade por dinheiro?
+64,Dificil,Polemica,Quem faria barraco em público?
+65,Dificil,Polemica,Quem processaria um amigo?
+66,Dificil,Polemica,Quem faria chantagem emocional?
+67,Dificil,Polemica,Quem contaria um segredo que prometeu guardar?
+68,Dificil,Polemica,Quem seria mais influenciável?
+69,Dificil,Polemica,Quem seria o mais fofoqueiro?
+70,Dificil,Polemica,Quem manipularia uma situação para sair por cima?
+71,Humor,Leve,Quem cairia em um golpe óbvio?
+72,Humor,Leve,Quem choraria vendo desenho?
+73,Humor,Leve,Quem compraria algo por impulso às três da manhã?
+74,Humor,Leve,Quem faria cosplay sem vergonha?
+75,Humor,Leve,Quem mais fala sozinho?
+76,Humor,Leve,Quem tropeça andando reto?
+77,Humor,Leve,Quem perderia um voo chegando cedo ao aeroporto?
+78,Humor,Leve,Quem ficaria preso no elevador por apertar todos os botões?
+79,Humor,Leve,Quem esqueceria onde estacionou o carro?
+80,Humor,Leve,Quem derrubaria o celular no vaso sanitário?
+81,Polemica,Alta,Quem tem mais chance de desaparecer e voltar meses depois?
+82,Polemica,Alta,Quem aceitaria um suborno?
+83,Polemica,Alta,Quem mudaria completamente de opinião por dinheiro?
+84,Polemica,Alta,Quem venderia um presente que ganhou?
+85,Polemica,Alta,Quem seria cancelado por um tweet antigo?
+86,Polemica,Alta,Quem faria um casamento só pelo dinheiro?
+87,Polemica,Alta,Quem faria uma aposta absurda?
+88,Polemica,Alta,Quem esconderia um erro até alguém descobrir?
+89,Polemica,Alta,Quem faria amizade apenas por interesse?
+90,Polemica,Alta,Quem mais exagera nas histórias?
+91,Polemica,Alta,Quem mentiria melhor?
+92,Polemica,Alta,Quem aceitaria fama instantânea mesmo perdendo a privacidade?
+93,Polemica,Alta,Quem largaria o emprego sem ter outro?
+94,Polemica,Alta,Quem faria um empréstimo para comprar algo supérfluo?
+95,Polemica,Alta,Quem seria influencer de cassino?
+96,Polemica,Alta,Quem venderia o próprio carro por impulso?
+97,Polemica,Alta,Quem faria uma loucura por amor?
+98,Polemica,Alta,Quem aceitaria morar em outro país amanhã?
+99,Polemica,Alta,Quem toparia um reality show polêmico?
+100,Polemica,Alta,Quem provavelmente venceria esse jogo por conhecer melhor todo mundo?
