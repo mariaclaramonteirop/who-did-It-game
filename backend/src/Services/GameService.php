@@ -735,6 +735,7 @@ final class GameService
 
     public function importQuestions(array $questions): array
     {
+        $maxQuestions = 300;
         $normalized = [];
         foreach ($questions as $index => $question) {
             if (!is_array($question)) {
@@ -755,6 +756,9 @@ final class GameService
 
         if ($normalized === []) {
             throw new HttpException(422, 'Nao havia perguntas validas para importar.');
+        }
+        if (count($normalized) > $maxQuestions) {
+            throw new HttpException(422, 'O CSV pode ter no maximo ' . $maxQuestions . ' perguntas por importacao.');
         }
 
         $created = array_map(fn (array $question) => $this->formatQuestion($question), $this->questions->createMany($normalized));

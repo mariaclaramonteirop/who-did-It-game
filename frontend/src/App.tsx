@@ -8,6 +8,11 @@ import { Ranking } from './components/Ranking';
 import { VisitorMode } from './visitor/VisitorMode';
 import type { AdminDashboard, AdminPlayerAccount, AdminRoom, AdminUser, Category, Player, PlayerAccount, Question, Room, Round, RoundResult } from './types/game';
 
+type ImportResult = {
+  imported: number;
+  questions: Question[];
+};
+
 const roundKey = (code: string) => `jdc-round-${code}`;
 const PLAYER_TOKEN_KEY = 'jdc-player-token';
 const PLAYER_USER_KEY = 'jdc-player-user';
@@ -676,7 +681,7 @@ function Admin() {
   const [filters, setFilters] = useState({ search: '', category: 'all', level: 'all', status: 'all' });
   const [importCsv, setImportCsv] = useState('text,category,level\nQuem fez isso no rol??,festa,leve\nQuem fez isso no improviso?,caos,medio');
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importResult, setImportResult] = useState<{ imported: number; questions: Question[] } | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editing, setEditing] = useState(emptyForm);
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '' });
@@ -775,7 +780,7 @@ function Admin() {
     setImportResult(null);
     try {
       const result = await gameApi.importQuestionsCsv(token, importCsv);
-      setImportResult(result);
+      setImportResult({ imported: result.imported, questions: ((result as { questions?: Question[] }).questions ?? []) as Question[] });
       load();
     } catch (err) {
       setError(apiError(err));
@@ -792,7 +797,7 @@ function Admin() {
     }
     try {
       const result = await gameApi.importQuestionsFile(token, importFile);
-      setImportResult(result);
+      setImportResult({ imported: result.imported, questions: ((result as { questions?: Question[] }).questions ?? []) as Question[] });
       setImportFile(null);
       load();
     } catch (err) {
@@ -1216,6 +1221,7 @@ function Admin() {
         <Card id="admin-import" className="grid gap-4">
           <h2 className="text-2xl font-black">Importar perguntas</h2>
           <p className="font-bold">Formato aceito no CSV: `text,category,level`.</p>
+          <p className="text-sm font-bold text-zinc-700">Limite por CSV: até 300 perguntas por importacao.</p>
           {importResult ? (
             <div className="grid gap-3 rounded-md border-2 border-teal bg-teal/10 p-4" aria-live="polite">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1223,11 +1229,11 @@ function Admin() {
                 <span className="rounded-md bg-teal px-2 py-1 text-sm font-black text-white">{importResult.imported} pergunta(s)</span>
               </div>
               <p className="text-sm font-bold text-zinc-700">
-                {importResult.questions?.length
+                {importResult.questions.length
                   ? 'As perguntas abaixo foram salvas no banco.'
                   : 'A importacao foi salva, mas o backend nao retornou a lista detalhada.'}
               </p>
-              {importResult.questions?.length ? (
+              {importResult.questions.length ? (
               <div className="grid gap-2">
                 {importResult.questions.map((question) => (
                   <div key={question.id} className="rounded-md border-2 border-ink bg-white p-3">

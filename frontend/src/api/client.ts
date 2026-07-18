@@ -16,7 +16,7 @@ import type {
 
 type ImportQuestionsResult = {
   imported: number;
-  questions?: Question[];
+  questions: Question[];
 };
 
 const api = axios.create({
@@ -99,9 +99,12 @@ export const gameApi = {
   importQuestionsFile: (token: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post<ImportQuestionsResult>('/questions/import', formData, { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` } }).then((r) => r.data);
+    return api.post<ImportQuestionsResult>('/questions/import', formData, { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` } })
+      .then((r) => ({ ...r.data, questions: r.data.questions ?? [] }));
   },
-  importQuestionsCsv: (token: string, csv: string) => api.post<ImportQuestionsResult>('/questions/import', { csv }, auth(token)).then((r) => r.data),
+  importQuestionsCsv: (token: string, csv: string) =>
+    api.post<ImportQuestionsResult>('/questions/import', { csv }, auth(token))
+      .then((r) => ({ ...r.data, questions: r.data.questions ?? [] })),
   listCategories: (includeInactive = false) =>
     api.get<Category[]>('/categories', { params: includeInactive ? { includeInactive: 1 } : {} }).then((r) => r.data),
   createCategory: (token: string, payload: { name: string; slug?: string }) => api.post<Category>('/categories', payload, auth(token)).then((r) => r.data),
