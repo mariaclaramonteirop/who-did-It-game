@@ -1217,11 +1217,17 @@ function Admin() {
           <h2 className="text-2xl font-black">Importar perguntas</h2>
           <p className="font-bold">Formato aceito no CSV: `text,category,level`.</p>
           {importResult ? (
-            <div className="grid gap-3 rounded-md border-2 border-teal bg-teal/10 p-4">
+            <div className="grid gap-3 rounded-md border-2 border-teal bg-teal/10 p-4" aria-live="polite">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-lg font-black text-ink">Importacao concluida</p>
                 <span className="rounded-md bg-teal px-2 py-1 text-sm font-black text-white">{importResult.imported} pergunta(s)</span>
               </div>
+              <p className="text-sm font-bold text-zinc-700">
+                {importResult.questions?.length
+                  ? 'As perguntas abaixo foram salvas no banco.'
+                  : 'A importacao foi salva, mas o backend nao retornou a lista detalhada.'}
+              </p>
+              {importResult.questions?.length ? (
               <div className="grid gap-2">
                 {importResult.questions.map((question) => (
                   <div key={question.id} className="rounded-md border-2 border-ink bg-white p-3">
@@ -1230,6 +1236,7 @@ function Admin() {
                   </div>
                 ))}
               </div>
+              ) : null}
             </div>
           ) : null}
           <form onSubmit={importFromFile} className="grid gap-3">

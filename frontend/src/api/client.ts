@@ -16,7 +16,7 @@ import type {
 
 type ImportQuestionsResult = {
   imported: number;
-  questions: Question[];
+  questions?: Question[];
 };
 
 const api = axios.create({
