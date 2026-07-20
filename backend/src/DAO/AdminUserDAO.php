@@ -28,8 +28,30 @@ final class AdminUserDAO
             )"
         );
 
-        $stmt = $this->db->query('SELECT COUNT(*) FROM admin_users');
-        if ((int) $stmt->fetchColumn() > 0) {
+        $admin = $this->findByUsername($username);
+        if ($admin !== null) {
+            $this->update((int) $admin['id'], [
+                'username' => $username,
+                'name' => 'Administrador',
+                'password_hash' => $passwordHash,
+                'role' => 'owner',
+                'permissions' => json_encode(['all'], JSON_UNESCAPED_UNICODE),
+                'is_active' => 1,
+            ]);
+            return;
+        }
+
+        $stmt = $this->db->query('SELECT id FROM admin_users ORDER BY id ASC LIMIT 1');
+        $firstAdminId = $stmt->fetchColumn();
+        if ($firstAdminId !== false) {
+            $this->update((int) $firstAdminId, [
+                'username' => $username,
+                'name' => 'Administrador',
+                'password_hash' => $passwordHash,
+                'role' => 'owner',
+                'permissions' => json_encode(['all'], JSON_UNESCAPED_UNICODE),
+                'is_active' => 1,
+            ]);
             return;
         }
 

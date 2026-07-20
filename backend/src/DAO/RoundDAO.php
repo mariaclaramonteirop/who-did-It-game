@@ -14,6 +14,22 @@ final class RoundDAO
 
     public function ensureSchema(): void
     {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS rounds (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                room_id INT NOT NULL,
+                question_id INT NOT NULL,
+                round_number INT NOT NULL,
+                vote_deadline_at DATETIME NULL,
+                status ENUM('waiting_votes','finished') DEFAULT 'waiting_votes',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+                FOREIGN KEY (question_id) REFERENCES questions(id),
+                UNIQUE (room_id, question_id)
+            )"
+        );
+
         $this->addColumnIfMissing(
             'rounds',
             'vote_deadline_at',

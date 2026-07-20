@@ -14,7 +14,36 @@ final class VoteDAO
 
     public function ensureSchema(): void
     {
-        $this->db->exec('ALTER TABLE votes MODIFY voted_player_id INT NULL');
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS votes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                round_id INT NOT NULL,
+                voter_player_id INT NOT NULL,
+                voted_player_id INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE,
+                FOREIGN KEY (voter_player_id) REFERENCES players(id) ON DELETE CASCADE,
+                FOREIGN KEY (voted_player_id) REFERENCES players(id) ON DELETE CASCADE,
+                UNIQUE (round_id, voter_player_id)
+            )"
+        );
+
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS round_winners (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                round_id INT NOT NULL,
+                player_id INT NOT NULL,
+                votes_received INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE,
+                FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+                UNIQUE (round_id, player_id)
+            )"
+        );
+
+        if (!$this->columnExists('votes', 'voted_player_id')) {
+            $this->db->exec('ALTER TABLE votes ADD COLUMN voted_player_id INT NULL AFTER voter_player_id');
+        }
     }
 
     public function create(int $roundId, int $voterId, ?int $votedId): void
@@ -74,5 +103,22 @@ final class VoteDAO
         $stmt = $this->db->prepare('SELECT voter_player_id FROM votes WHERE round_id = :round_id');
         $stmt->execute(['round_id' => $roundId]);
         return array_map(fn (array $row) => (int) $row['voter_player_id'], $stmt->fetchAll());
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = :table_name
+               AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            'table_name' => $table,
+            'column_name' => $column,
+        ]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 }

@@ -12,6 +12,25 @@ final class PlayerDAO
     {
     }
 
+    public function ensureSchema(): void
+    {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS players (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                room_id INT NOT NULL,
+                account_id INT NULL,
+                name VARCHAR(100) NOT NULL,
+                score INT NOT NULL DEFAULT 0,
+                is_host BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+                FOREIGN KEY (account_id) REFERENCES player_accounts(id) ON DELETE SET NULL,
+                UNIQUE (room_id, name)
+            )"
+        );
+    }
+
     public function create(int $roomId, string $name, bool $isHost, ?int $accountId = null): array
     {
         $stmt = $this->db->prepare(

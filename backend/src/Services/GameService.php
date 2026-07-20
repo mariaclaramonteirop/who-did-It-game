@@ -46,9 +46,11 @@ final class GameService
         $this->rooms = new RoomDAO($db);
         $this->rooms->ensureSchema();
         $this->players = new PlayerDAO($db);
+        $this->players->ensureSchema();
         $this->categories = new CategoryDAO($db);
         $this->categories->ensureSchema();
         $this->questions = new QuestionDAO($db);
+        $this->questions->ensureSchema();
         $this->rounds = new RoundDAO($db);
         $this->rounds->ensureSchema();
         $this->votes = new VoteDAO($db);
@@ -1250,28 +1252,77 @@ final class GameService
 
     public function parseQuestionsCsv(string $csv): array
     {
-        $lines = preg_split('/\r\n|\n|\r/', trim($csv));
+        $csv = trim($csv);
+        if ($csv === '') {
+            throw new HttpException(422, 'O CSV precisa ter cabecalho e pelo menos uma pergunta.');
+        }
+
+        if (str_starts_with($csv, "\xEF\xBB\xBF")) {
+            $csv = substr($csv, 3);
+        }
+
+        $lines = preg_split('/\r\n|\n|\r/', $csv);
         if (!$lines || count($lines) < 2) {
             throw new HttpException(422, 'O CSV precisa ter cabecalho e pelo menos uma pergunta.');
         }
 
-        $header = array_map('trim', str_getcsv(array_shift($lines)));
+        $headerLine = array_shift($lines);
+        $delimiter = $this->detectCsvDelimiter($headerLine);
+        $header = array_map([$this, 'normalizeCsvHeader'], str_getcsv($headerLine, $delimiter));
         $questions = [];
         foreach ($lines as $lineNumber => $line) {
             if (trim($line) === '') {
                 continue;
             }
 
-            $row = array_map('trim', str_getcsv($line));
-            $assoc = [];
+            $row = array_map('trim', str_getcsv($line, $delimiter));
+            $assoc = ['text' => '', 'category' => 'geral', 'level' => 'leve'];
             foreach ($header as $index => $column) {
-                $assoc[$column] = $row[$index] ?? '';
+                $value = $row[$index] ?? '';
+                if ($column === 'text') {
+                    $assoc['text'] = $value;
+                } elseif ($column === 'category') {
+                    $assoc['category'] = $value !== '' ? $value : 'geral';
+                } elseif ($column === 'level') {
+                    $assoc['level'] = $this->normalizeQuestionLevel($value);
+                }
             }
 
-            $questions[] = $assoc;
+            if ($assoc['text'] !== '') {
+                $questions[] = $assoc;
+            }
         }
 
         return $questions;
+    }
+
+    private function detectCsvDelimiter(string $headerLine): string
+    {
+        $semicolonCount = substr_count($headerLine, ';');
+        $commaCount = substr_count($headerLine, ',');
+
+        return $semicolonCount > $commaCount ? ';' : ',';
+    }
+
+    private function normalizeCsvHeader(string $column): string
+    {
+        $column = strtolower(trim($column));
+        $column = preg_replace('/^\xEF\xBB\xBF/u', '', $column) ?? $column;
+
+        return match ($column) {
+            'text', 'pergunta', 'enunciado' => 'text',
+            'category', 'categoria' => 'category',
+            'level', 'nivel', 'nível', 'dificuldade' => 'level',
+            default => $column,
+        };
+    }
+
+    private function normalizeQuestionLevel(string $value): string
+    {
+        $level = strtolower(trim($value));
+        return in_array($level, ['leve', 'medio', 'pesado', 'caos', 'médio'], true)
+            ? str_replace('médio', 'medio', $level)
+            : 'leve';
     }
 
     private function normalizeCategoryFilter(mixed $value): string

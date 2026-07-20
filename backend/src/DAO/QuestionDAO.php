@@ -12,6 +12,21 @@ final class QuestionDAO
     {
     }
 
+    public function ensureSchema(): void
+    {
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS questions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                text VARCHAR(255) NOT NULL,
+                category VARCHAR(100) DEFAULT 'geral',
+                level ENUM('leve','medio','pesado','caos') DEFAULT 'leve',
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )"
+        );
+    }
+
     public function create(array $data): array
     {
         $stmt = $this->db->prepare('INSERT INTO questions (text, category, level) VALUES (:text, :category, :level)');
